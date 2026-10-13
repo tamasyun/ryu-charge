@@ -1,0 +1,73 @@
+
+{
+  "spots": [
+    {
+      "id": "spot-001",
+      "name": "1階 学習スペース",
+      "building_name": "仮建物A",
+      "floor": 1,
+      "location_detail": "1階エントランス付近",
+      "latitude": 26.25334341057308,
+      "longitude": 127.76640269718175,
+      "outlets": [
+        {
+          "id": "outlet-001",
+          "location_detail": "窓際の机の下",
+          "ac_ports": 2
+        },
+        {
+          "id": "outlet-002",
+          "location_detail": "入口右側の壁",
+          "ac_ports": 2
+        }
+      ]
+    },
+    {
+      "id": "spot-002",
+      "name": "2階 自習室",
+      "building_name": "仮建物B",
+      "floor": 2,
+      "location_detail": "2階の階段を上がって左側",
+      "latitude": 26.248168071253232,
+      "longitude": 127.76655370043737,
+      "outlets": [
+        {
+          "id": "outlet-003",
+          "location_detail": "窓側の机",
+          "ac_ports": 2
+        },
+        {
+          "id": "outlet-004",
+          "location_detail": "中央の机の下",
+          "ac_ports": 4
+        },
+        {
+          "id": "outlet-005",
+          "location_detail": "奥の壁際",
+          "ac_ports": 2
+        }
+      ]
+    },
+    {
+      "id": "spot-003",
+      "name": "3階 オープンスペース",
+      "building_name": "仮建物C",
+      "floor": 3,
+      "location_detail": "3階エレベーター前",
+      "latitude": 26.253333792043247,
+      "longitude": 127.76587514755421,
+      "outlets": [
+        {
+          "id": "outlet-006",
+          "location_detail": "長机の下",
+          "ac_ports": 4
+        },
+        {
+          "id": "outlet-007",
+          "location_detail": "ソファ横の壁",
+          "ac_ports": 2
+        }
+      ]
+    }
+  ]
+}
