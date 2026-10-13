@@ -2,73 +2,151 @@
 {
   "buildings": [
     {
-      "id": "building-001",
-      "name": "仮建物A",
+      "id": "building-1",
+      "name": "工学部1号館",
       "latitude": 26.25334341057308,
       "longitude": 127.76640269718175,
       "rooms": [
         {
-          "id": "room-001",
-          "name": "A101教室",
+          "id": "room-11",
+          "name": "琉ラボ",
           "floor": 1,
-          "location_detail": "1階エントランス付近",
+          "location_detail": "工学部1号館1階",
           "outlets": [
             {
-              "id": "outlet-001",
-              "location_detail": "窓際の机の下",
-              "ac_ports": 2
+              "id": "outlet-111",
+              "location_detail": "延長コード",
+              "ac_ports": null
+            },
+            {
+              "id": "outlet-112",
+              "location_detail": "中庭側壁",
+              "ac_ports": null
             }
           ]
         },
         {
-          "id": "room-002",
-          "name": "A201教室",
+          "id": "room-12",
+          "name": "工1-221",
           "floor": 2,
-          "location_detail": "2階階段付近",
+          "location_detail": "工学部1号館2階",
           "outlets": [
             {
-              "id": "outlet-002",
-              "location_detail": "入口右側の壁",
-              "ac_ports": 2
+              "id": "outlet-121",
+              "location_detail": "机の下",
+              "ac_ports": null
+            }
+          ]
+        },
+        {
+          "id": "room-13",
+          "name": "工1-222",
+          "floor": 2,
+          "location_detail": "工学部1号館2階",
+          "outlets": [
+            {
+              "id": "outlet-131",
+              "location_detail": "机の下",
+              "ac_ports": null
+            }
+          ]
+        },
+        {
+          "id": "room-14",
+          "name": "工1-321",
+          "floor": 3,
+          "location_detail": "工学部1号館3階",
+          "outlets": [
+            {
+              "id": "outlet-141",
+              "location_detail": "机の下",
+              "ac_ports": null
+            }
+          ]
+        },
+        {
+          "id": "room-15",
+          "name": "工1-322",
+          "floor": 3,
+          "location_detail": "工学部1号館3階",
+          "outlets": [
+            {
+              "id": "outlet-151",
+              "location_detail": "机の下",
+              "ac_ports": null
             }
           ]
         }
       ]
     },
     {
-      "id": "building-002",
-      "name": "仮建物B",
-      "latitude": 26.248168071253232,
-      "longitude": 127.76655370043737,
+      "id": "building-2",
+      "name": "地域創生総合研究棟",
+      "latitude": 26.253333792043247,
+      "longitude": 127.76587514755421,
       "rooms": [
         {
-          "id": "room-003",
-          "name": "B201教室",
-          "floor": 2,
-          "location_detail": "2階の階段を上がって左側",
+          "id": "room-21",
+          "name": "琉ラボ",
+          "floor": 1,
+          "location_detail": "1階エントランス",
           "outlets": [
             {
-              "id": "outlet-003",
-              "location_detail": "窓側の机",
-              "ac_ports": 2
-            },
-            {
-              "id": "outlet-004",
-              "location_detail": "中央の机の下",
-              "ac_ports": 4
+              "id": "outlet-211",
+              "location_detail": "机の上",
+              "ac_ports": null
             }
           ]
         },
         {
-          "id": "room-004",
-          "name": "B301教室",
-          "floor": 3,
-          "location_detail": "3階廊下の奥",
+          "id": "room-22",
+          "name": "501教室",
+          "floor": 5,
+          "location_detail": "エレベーターから出て右側",
           "outlets": [
             {
-              "id": "outlet-005",
-              "location_detail": "奥の壁際",
-              "ac_ports": 2
+              "id": "outlet-221",
+              "location_detail": "机の上",
+              "ac_ports": null
+            }
+          ]
+        },
+        {
+          "id": "room-23",
+          "name": "502教室",
+          "floor": 5,
+          "location_detail": "エレベーターから出て右側",
+          "outlets": [
+            {
+              "id": "outlet-231",
+              "location_detail": "机の上",
+              "ac_ports": null
+            }
+          ]
+        },
+        {
+          "id": "room-24",
+          "name": "506教室",
+          "floor": 5,
+          "location_detail": "エレベーターから出て左側",
+          "outlets": [
+            {
+              "id": "outlet-241",
+              "location_detail": "机の上",
+              "ac_ports": null
+            }
+          ]
+        },
+        {
+          "id": "room-25",
+          "name": "508教室",
+          "floor": 5,
+          "location_detail": "エレベーターから出て左側",
+          "outlets": [
+            {
+              "id": "outlet-251",
+              "location_detail": "机の上",
+              "ac_ports": null
             }
           ]
         }
@@ -76,9 +154,9 @@
     },
     {
       "id": "building-003",
-      "name": "仮建物C",
-      "latitude": 26.253333792043247,
-      "longitude": 127.76587514755421,
+      "name": "琉大附属図書館",
+      "latitude": 26.248168071253232,
+      "longitude": 127.76655370043737,
       "rooms": [
         {
           "id": "room-005",
