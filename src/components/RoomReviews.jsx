@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import './RoomReviews.css'
 
-function ReviewForm({ roomId, onSubmitted }) {
+function ReviewForm({ roomId, canPost, onSubmitted }) {
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
@@ -10,6 +10,10 @@ function ReviewForm({ roomId, onSubmitted }) {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (!canPost) {
+      setErrorMessage('レビューの投稿には大学メールでのログインが必要です。')
+      return
+    }
     const message = comment.trim()
     if (saving || rating < 1 || rating > 5 || !message || message.length > 500) return
 
@@ -24,7 +28,7 @@ function ReviewForm({ roomId, onSubmitted }) {
       if (error) throw error
       onSubmitted()
     } catch (error) {
-      setErrorMessage(error.message || '投稿に失敗しました。')
+      setErrorMessage(error instanceof Error ? error.message : '投稿に失敗しました。')
     } finally {
       setSaving(false)
     }
@@ -42,12 +46,9 @@ function ReviewForm({ roomId, onSubmitted }) {
             aria-label={`${value}つ星`}
             aria-pressed={rating === value}
             onClick={() => setRating(value)}
-          >
-            ★
-          </button>
+          >★</button>
         ))}
       </div>
-
       <label htmlFor={`review-comment-${roomId}`}>コメント *</label>
       <textarea
         id={`review-comment-${roomId}`}
@@ -60,12 +61,11 @@ function ReviewForm({ roomId, onSubmitted }) {
       />
       <small>{comment.length} / 500文字</small>
       <p className="review-note">レビューは公開されます。個人情報は書き込まないでください。</p>
-
       {errorMessage && <p className="review-error" role="alert">{errorMessage}</p>}
       <button
         className="save-button"
         type="submit"
-        disabled={saving || rating === 0 || !comment.trim()}
+        disabled={saving || !canPost || rating === 0 || !comment.trim()}
       >
         {saving ? '投稿中...' : '投稿する'}
       </button>
@@ -92,7 +92,7 @@ function ReviewList({ roomId }) {
         if (error) throw error
         if (active) setReviews(data ?? [])
       } catch (error) {
-        if (active) setErrorMessage(error.message || '読み込みに失敗しました。')
+        if (active) setErrorMessage(error instanceof Error ? error.message : '読み込みに失敗しました。')
       } finally {
         if (active) setLoading(false)
       }
@@ -111,9 +111,7 @@ function ReviewList({ roomId }) {
   return (
     <div className="review-list">
       <p className="review-summary">
-        {average === null
-          ? 'まだレビューはありません。'
-          : `★ ${average.toFixed(1)} / 5（${reviews.length}件）`}
+        {average === null ? 'まだレビューはありません。' : `★ ${average.toFixed(1)} / 5（${reviews.length}件）`}
       </p>
       {reviews.map(review => (
         <article key={review.id} className="review-item">
@@ -132,7 +130,7 @@ function ReviewList({ roomId }) {
   )
 }
 
-export default function RoomReviews({ roomId, roomName, mode, onBack, onSubmitted }) {
+export default function RoomReviews({ roomId, roomName, mode, canPost, onLogin, onBack, onSubmitted }) {
   return (
     <section className="room-reviews">
       <button className="review-back" type="button" onClick={onBack}>
@@ -140,7 +138,16 @@ export default function RoomReviews({ roomId, roomName, mode, onBack, onSubmitte
       </button>
       <h3>{roomName}のレビュー</h3>
       {mode === 'write' ? (
-        <ReviewForm roomId={roomId} onSubmitted={onSubmitted} />
+        canPost ? (
+          <ReviewForm roomId={roomId} canPost={canPost} onSubmitted={onSubmitted} />
+        ) : (
+          <div className="review-login-required">
+            <p>レビューの投稿には琉球大学のメールアドレスでのログインが必要です。</p>
+            <button type="button" className="save-button" onClick={onLogin}>
+              ログインして投稿
+            </button>
+          </div>
+        )
       ) : (
         <ReviewList roomId={roomId} />
       )}
