@@ -1,9 +1,10 @@
 
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMap, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
 import { supabase } from './lib/supabase'
+import { getBuildingMarkerIcon } from './config/buildingMarkers'
 
 function MapUpdater({ selectedBuilding }) {
   const map = useMap()
@@ -178,7 +179,9 @@ function App() {
         <section className="map-area" aria-label="キャンパスの地図">
           <MapContainer
             center={[26.2508, 127.7662]}
-            zoom={15}
+            zoom={17}
+            minZoom={15}
+            maxZoom={18}
             style={{ height: '100%', width: '100%' }}
           >
             <TileLayer
@@ -192,10 +195,23 @@ function App() {
               <Marker
                 key={building.id}
                 position={[building.latitude, building.longitude]}
+                icon={getBuildingMarkerIcon(building)}
                 eventHandlers={{
                   click: () => selectBuilding(building),
                 }}
-              />
+              >
+                <Popup>
+                  <strong>{building.name}</strong>
+                  <div>
+                    コンセント設備：合計 {
+                      building.rooms.reduce(
+                        (total, room) => total + room.outlets.length,
+                        0
+                      )
+                    } 件
+                  </div>
+                </Popup>
+              </Marker>
             ))}
           </MapContainer>
         </section>
