@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import './App.css'
 import { supabase } from './lib/supabase'
 import { getBuildingMarkerIcon } from './config/buildingMarkers'
+import RoomReviews from './components/RoomReviews'
 
 function MapUpdater({ selectedBuilding }) {
   const map = useMap()
@@ -32,11 +33,15 @@ function App() {
   const [selectedBuildingId, setSelectedBuildingId] = useState(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [formMode, setFormMode] = useState('outlet')
+  const [detailView, setDetailView] = useState('details')
+  const [selectedRoomId, setSelectedRoomId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
   const selectedBuilding =
     buildings.find(b => b.id === selectedBuildingId) ?? null
+  const selectedRoom =
+    selectedBuilding?.rooms.find(room => room.id === selectedRoomId) ?? null
 
   async function loadBuildings() {
     const { data, error } = await supabase
@@ -90,6 +95,8 @@ function App() {
 
   function selectBuilding(building) {
     setSelectedBuildingId(building.id)
+    setDetailView('details')
+    setSelectedRoomId(null)
     setFormMode(building.rooms.length ? 'outlet' : 'room')
     setIsFormOpen(false)
     setErrorMessage('')
@@ -230,6 +237,8 @@ function App() {
                 onClick={() => {
                   setSelectedBuildingId(null)
                   setIsFormOpen(false)
+                  setDetailView('details')
+                  setSelectedRoomId(null)
                 }}
               >
                 ×
@@ -237,7 +246,19 @@ function App() {
             </div>
 
             <div className="detail-content">
-              {isFormOpen ? (
+              {detailView !== 'details' && selectedRoom ? (
+                <RoomReviews
+                  key={selectedRoom.id}
+                  roomId={selectedRoom.id}
+                  roomName={selectedRoom.name}
+                  mode={detailView}
+                  onBack={() => {
+                    setDetailView('details')
+                    setSelectedRoomId(null)
+                  }}
+                  onSubmitted={() => setDetailView('reviews')}
+                />
+              ) : isFormOpen ? (
                 <form className="add-form" onSubmit={handleAdd}>
                   <h3>データを追加</h3>
 
@@ -344,10 +365,23 @@ function App() {
 
                   {selectedBuilding.rooms.map(room => (
                     <section key={room.id} className="room-detail">
-                      <h3>
-                        {room.name}
-                        {room.floor != null ? `（${room.floor}階）` : ''}
-                      </h3>
+                      <div className="room-heading">
+                        <h3>
+                          {room.name}
+                          {room.floor != null ? `（${room.floor}階）` : ''}
+                        </h3>
+                        <button
+                          type="button"
+                          className="write-review-button"
+                          onClick={() => {
+                            setSelectedRoomId(room.id)
+                            setIsFormOpen(false)
+                            setDetailView('write')
+                          }}
+                        >
+                          レビューを投稿
+                        </button>
+                      </div>
                       <p>{room.location_detail}</p>
 
                       {room.outlets.length === 0 ? (
@@ -366,24 +400,38 @@ function App() {
                           ))}
                         </ul>
                       )}
+                      <button
+                        type="button"
+                        className="review-list-link"
+                        onClick={() => {
+                          setSelectedRoomId(room.id)
+                          setIsFormOpen(false)
+                          setDetailView('reviews')
+                        }}
+                      >
+                        <span>この部屋のレビューを見る</span>
+                        <span aria-hidden="true">→</span>
+                      </button>
                     </section>
                   ))}
                 </>
               )}
             </div>
 
-            <div className="detail-footer">
-              <button
-                type="button"
-                className="add-button"
-                onClick={() => {
-                  setIsFormOpen(!isFormOpen)
-                  setErrorMessage('')
-                }}
-              >
-                {isFormOpen ? 'キャンセル' : '＋ 追加'}
-              </button>
-            </div>
+            {detailView === 'details' && (
+              <div className="detail-footer">
+                <button
+                  type="button"
+                  className="add-button"
+                  onClick={() => {
+                    setIsFormOpen(!isFormOpen)
+                    setErrorMessage('')
+                  }}
+                >
+                  {isFormOpen ? 'キャンセル' : '＋ 追加'}
+                </button>
+              </div>
+            )}
           </aside>
         )}
       </main>

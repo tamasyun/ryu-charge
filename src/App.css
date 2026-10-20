@@ -237,3 +237,143 @@
   border-radius: 6px;
   font-size: 13px;
 }
+
+/* 建物ヘッダーのレビュー投稿ボタン */
+.write-review-button {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 建物詳細の末尾に配置するレビュー一覧リンク */
+.review-list-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 24px;
+  padding: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.review-list-link:hover,
+.write-review-button:hover,
+.review-back:hover {
+  opacity: 0.7;
+}
+
+/* 建物詳細へ戻る */
+.review-back {
+  padding: 0;
+  margin-bottom: 20px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* レビュー画面 */
+.reviews h3 {
+  margin: 0 0 20px;
+  font-size: 19px;
+}
+
+.reviews {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.reviews h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.review-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0 24px;
+}
+
+.review-form label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rating-input {
+  display: flex;
+  gap: 4px;
+}
+
+.rating-input button {
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: #999;
+  font-size: 30px;
+  cursor: pointer;
+}
+
+.rating-input button.selected {
+  color: #e3a52f;
+}
+
+.review-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+}
+
+.review-form small {
+  color: var(--text);
+  text-align: right;
+}
+
+.review-item {
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.review-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.review-stars {
+  color: #e3a52f;
+}
+
+.review-item time {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.review-item p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
