@@ -1,13 +1,13 @@
-/* RoomReviews.jsx が読み込むスタイル。建物詳細内のボタンにも適用する */
-.room-heading {
+/* RoomReviews.jsx が読み込むスタイル。建物詳細内のリンクにも適用する */
+.review-list-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 8px;
+  margin: 16px 0 20px;
 }
-.room-heading h3 { margin: 0; }
+.review-list-heading h3 { margin: 0; }
 .write-review-button {
   padding: 7px 10px;
   border: 1px solid var(--border);
@@ -18,6 +18,9 @@
   font-size: 13px;
   cursor: pointer;
 }
+.review-link-content { display: flex; flex-direction: column; gap: 3px; }
+.review-link-overview { color: var(--text); font-size: 13px; }
+/* 教室の区切りと重複しないよう、上罫線は付けない。 */
 .review-list-link {
   display: flex;
   justify-content: space-between;
@@ -27,7 +30,6 @@
   margin-top: 14px;
   padding: 14px 0 4px;
   border: 0;
-  border-top: 1px solid var(--border);
   background: transparent;
   color: var(--text-h);
   font: inherit;
@@ -44,7 +46,7 @@
   font-size: 13px;
   cursor: pointer;
 }
-.room-reviews h3 { margin: 16px 0 20px; font-size: 19px; }
+.room-reviews h3 { font-size: 19px; }
 .review-form { display: flex; flex-direction: column; gap: 10px; }
 .review-field-label, .review-form label { color: var(--text-h); font-size: 14px; font-weight: 600; }
 .rating-input { display: flex; gap: 3px; }
@@ -63,7 +65,7 @@
 }
 .review-form small { color: var(--text); text-align: right; }
 .review-note { color: var(--text); font-size: 12px; }
-.review-error { color: #b91c1c; font-size: 13px; overflow-wrap: anywhere; }
+.review-error { color: var(--error); font-size: 13px; overflow-wrap: anywhere; }
 .review-item { padding: 14px 0; border-top: 1px solid var(--border); }
 .review-item-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .review-stars { color: #d99a18; }

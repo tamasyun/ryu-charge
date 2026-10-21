@@ -1,53 +1,26 @@
-import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, useMap, Popup } from 'react-leaflet'
-import 'leaflet/dist/leaflet.css'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase'
-import { isUniversityEmail } from './lib/universityEmail'
-import { getBuildingMarkerIcon } from './config/buildingMarkers'
-import RoomReviews from './components/RoomReviews'
-import LoginDialog from './components/LoginDialog'
+import { createRoom, createOutlet, fetchBuildings } from './services/buildings'
+import { isUniversityEmail } from './utils/universityEmail'
+import { readRedirectIntent, clearRedirectIntent } from './utils/authRedirect'
+import { useMediaQuery } from './hooks/useMediaQuery'
+import { useReviewOverview } from './hooks/useReviewOverview'
+import AddDataForm from './components/buildings/AddDataForm'
+import BuildingRooms from './components/buildings/BuildingRooms'
+import BuildingDetailsPanel from './components/buildings/BuildingDetailsPanel'
+import CampusMap from './components/map/CampusMap'
+import RoomReviews from './components/reviews/RoomReviews'
+import LoginDialog from './components/auth/LoginDialog'
 
-function MapUpdater({ selectedBuilding }) {
-  const map = useMap()
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      map.invalidateSize()
-      if (selectedBuilding) {
-        map.panTo(
-          [selectedBuilding.latitude, selectedBuilding.longitude],
-          { animate: false }
-        )
-      }
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [map, selectedBuilding])
-
-  return null
-}
-
-// Preserve the destination through Supabase's full-page email redirect.
-function readRedirectIntent() {
-  const params = new URLSearchParams(window.location.search)
-  const type = params.get('rc_intent')
-  const buildingId = params.get('rc_building')
-  const roomId = params.get('rc_room')
-  if (!buildingId) return null
-  if (type === 'add') return { type, buildingId }
-  if (type === 'review' && roomId) return { type, buildingId, roomId }
-  return null
-}
-
-function clearRedirectIntent() {
-  const url = new URL(window.location.href)
-  url.searchParams.delete('rc_intent')
-  url.searchParams.delete('rc_building')
-  url.searchParams.delete('rc_room')
-  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
-}
+// 小さい画面でもヘッダーと追加ボタンを同時に表示できる高さを確保する。
+const PORTRAIT_SNAP_POINTS = ['200px', 0.5, 0.85]
+const LANDSCAPE_SNAP_POINTS = ['200px', 0.7, 0.9]
 
 function App() {
+  const isMobile = useMediaQuery('(max-width: 760px)')
+  const isLandscape = useMediaQuery('(orientation: landscape)')
+  const [sheetSnapIndex, setSheetSnapIndex] = useState(1)
   const [buildings, setBuildings] = useState([])
   const [selectedBuildingId, setSelectedBuildingId] = useState(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -60,19 +33,35 @@ function App() {
   const [user, setUser] = useState(null)
   const [authReady, setAuthReady] = useState(false)
   const [isLoginOpen, setIsLoginOpen] = useState(false)
+  const loginReturnFocusRef = useRef(null)
   const [signingOut, setSigningOut] = useState(false)
   const [loginIntent, setLoginIntent] = useState(null)
   const [redirectIntent, setRedirectIntent] = useState(readRedirectIntent)
+  const [reviewOverviewVersion, setReviewOverviewVersion] = useState(0)
 
   const canPost = authReady && isUniversityEmail(user?.email)
   const selectedBuilding =
     buildings.find(building => building.id === selectedBuildingId) ?? null
   const selectedRoom =
     selectedBuilding?.rooms.find(room => room.id === selectedRoomId) ?? null
+  const reviewOverview = useReviewOverview(selectedBuilding, reviewOverviewVersion)
+  const sheetSnapPoints = isLandscape ? LANDSCAPE_SNAP_POINTS : PORTRAIT_SNAP_POINTS
 
   function openLogin(intent = null) {
+    loginReturnFocusRef.current = document.activeElement
     setLoginIntent(intent)
     setIsLoginOpen(true)
+  }
+
+  function closeLogin() {
+    setIsLoginOpen(false)
+  }
+
+  function restoreLoginFocus() {
+    const target = loginReturnFocusRef.current?.isConnected
+      ? loginReturnFocusRef.current
+      : document.querySelector('.auth-button')
+    target?.focus()
   }
 
   useEffect(() => {
@@ -102,43 +91,15 @@ function App() {
   }
 
   async function loadBuildings() {
-    const { data, error } = await supabase
-      .from('buildings')
-      .select(`
-        id, name, latitude, longitude,
-        rooms (
-          id, name, floor, location_detail,
-          outlets (id, location_detail, ac_ports)
-        )
-      `)
-      .order('id')
-    if (error) throw error
-
-    setBuildings((data ?? []).map(building => ({
-      ...building,
-      rooms: [...building.rooms].sort((a, b) =>
-        (a.floor ?? 0) - (b.floor ?? 0) ||
-        a.name.localeCompare(b.name, 'ja')
-      ),
-    })))
+    setBuildings(await fetchBuildings())
   }
 
   useEffect(() => {
     let active = true
     async function initialize() {
       try {
-        const { data, error } = await supabase
-          .from('buildings')
-          .select(`
-            id, name, latitude, longitude,
-            rooms (
-              id, name, floor, location_detail,
-              outlets (id, location_detail, ac_ports)
-            )
-          `)
-          .order('id')
-        if (error) throw error
-        if (active) setBuildings(data ?? [])
+        const buildings = await fetchBuildings()
+        if (active) setBuildings(buildings)
       } catch (error) {
         if (active) setErrorMessage(error instanceof Error ? error.message : '建物を取得できませんでした。')
       }
@@ -147,13 +108,12 @@ function App() {
     return () => { active = false }
   }, [])
 
-  // Following a Magic Link may open the app in a new tab; the destination is
-  // encoded in the redirect URL, rather than sessionStorage.
+  // 別タブで開く認証リンクでも、URLから操作を再開する。
   useEffect(() => {
     const intent = redirectIntent ?? loginIntent
     if (!canPost || !intent || buildings.length === 0) return
 
-    // Restore selection after the auth callback and building fetch are both ready.
+    // 認証と建物データが揃ってから、元の画面を復元する。
     const frame = requestAnimationFrame(() => {
       const building = buildings.find(b => b.id === intent.buildingId)
       if (building) {
@@ -164,10 +124,12 @@ function App() {
           setSelectedRoomId(intent.roomId)
           setDetailView('write')
           setIsFormOpen(false)
+          setSheetSnapIndex(2)
         } else if (intent.type === 'add') {
           setSelectedRoomId(null)
           setDetailView('details')
           setIsFormOpen(true)
+          setSheetSnapIndex(2)
         }
       }
 
@@ -185,6 +147,14 @@ function App() {
     setFormMode(building.rooms.length ? 'outlet' : 'room')
     setIsFormOpen(false)
     setErrorMessage('')
+    setSheetSnapIndex(1)
+  }
+
+  function closeDetails() {
+    setSelectedBuildingId(null)
+    setIsFormOpen(false)
+    setDetailView('details')
+    setSelectedRoomId(null)
   }
 
   async function handleAdd(event) {
@@ -198,7 +168,7 @@ function App() {
 
     const form = new FormData(event.currentTarget)
     const text = name => String(form.get(name) ?? '').trim()
-    let table
+    let createRecord
     let record
 
     if (formMode === 'room') {
@@ -212,7 +182,7 @@ function App() {
         setErrorMessage('教室の入力内容を確認してください。')
         return
       }
-      table = 'rooms'
+      createRecord = createRoom
       record = {
         id: `room-${crypto.randomUUID()}`,
         building_id: selectedBuilding.id,
@@ -232,7 +202,7 @@ function App() {
         setErrorMessage('コンセントの入力内容を確認してください。')
         return
       }
-      table = 'outlets'
+      createRecord = createOutlet
       record = {
         id: `outlet-${crypto.randomUUID()}`,
         room_id: roomId,
@@ -244,8 +214,7 @@ function App() {
     setSaving(true)
     setErrorMessage('')
     try {
-      const { error } = await supabase.from(table).insert(record)
-      if (error) throw error
+      await createRecord(record)
       await loadBuildings()
       setIsFormOpen(false)
     } catch (error) {
@@ -253,6 +222,84 @@ function App() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function renderDetailBody() {
+    return (
+      <>
+        {detailView !== 'details' && selectedRoom ? (
+          <RoomReviews
+            key={selectedRoom.id}
+            roomId={selectedRoom.id}
+            roomName={selectedRoom.name}
+            mode={detailView}
+            canPost={canPost}
+            authReady={authReady}
+            isLoggedIn={Boolean(user)}
+            onWrite={() => {
+              setDetailView('write')
+              setSheetSnapIndex(2)
+            }}
+            onLogin={() => {
+              if (user && !canPost) {
+                setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
+              } else {
+                openLogin({ type: 'review', buildingId: selectedBuilding.id, roomId: selectedRoom.id })
+              }
+            }}
+            onBack={() => {
+              setDetailView('details')
+              setSelectedRoomId(null)
+            }}
+            onSubmitted={() => {
+              setReviewOverviewVersion(version => version + 1)
+              setDetailView('reviews')
+            }}
+          />
+        ) : isFormOpen && canPost ? (
+          <AddDataForm
+            building={selectedBuilding}
+            formMode={formMode}
+            onFormModeChange={setFormMode}
+            onSubmit={handleAdd}
+            saving={saving}
+          />
+        ) : (
+          <BuildingRooms
+            building={selectedBuilding}
+            reviewOverview={reviewOverview}
+            onShowReviews={roomId => {
+              setSelectedRoomId(roomId)
+              setIsFormOpen(false)
+              setDetailView('reviews')
+              setSheetSnapIndex(2)
+            }}
+          />
+        )}
+      </>
+    )
+  }
+
+  function renderDetailFooter() {
+    return detailView === 'details' && authReady && user && (
+      <div className="detail-footer">
+        <button
+          type="button"
+          className="add-button"
+          onClick={() => {
+            setErrorMessage('')
+            if (!canPost) {
+              setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
+              return
+            }
+            if (!isFormOpen) setSheetSnapIndex(2)
+            setIsFormOpen(open => !open)
+          }}
+        >
+          {!canPost ? '追加できません' : isFormOpen ? 'キャンセル' : '＋ 追加'}
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -278,226 +325,35 @@ function App() {
         </div>
       </header>
 
-      {isLoginOpen && !user && (
-        <LoginDialog
-          onClose={() => setIsLoginOpen(false)}
-          redirectIntent={loginIntent ?? redirectIntent}
-        />
-      )}
+      <LoginDialog
+        open={isLoginOpen && !user}
+        onClose={closeLogin}
+        onAfterClose={restoreLoginFocus}
+        returnFocusRef={loginReturnFocusRef}
+      />
 
       {errorMessage && <p role="alert" className="app-error">{errorMessage}</p>}
 
       <main className={`map-layout ${selectedBuilding ? 'with-details' : ''}`}>
-        <section className="map-area" aria-label="キャンパスの地図">
-          <MapContainer
-            center={[26.2508, 127.7662]}
-            zoom={17}
-            minZoom={15}
-            maxZoom={18}
-            style={{ height: '100%', width: '100%' }}
-          >
-            <TileLayer
-              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution="&copy; OpenStreetMap contributors"
-            />
-            <MapUpdater selectedBuilding={selectedBuilding} />
-            {buildings.map(building => (
-              <Marker
-                key={building.id}
-                position={[building.latitude, building.longitude]}
-                icon={getBuildingMarkerIcon(building)}
-                eventHandlers={{ click: () => selectBuilding(building) }}
-              >
-                <Popup>
-                  <strong>{building.name}</strong>
-                  <div>
-                    コンセント設備：合計 {
-                      building.rooms.reduce((total, room) => total + room.outlets.length, 0)
-                    } 件
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-        </section>
+        <CampusMap
+          buildings={buildings}
+          selectedBuilding={selectedBuilding}
+          isMobile={isMobile}
+          onSelectBuilding={selectBuilding}
+        />
 
         {selectedBuilding && (
-          <aside className="detail-panel">
-            <div className="detail-header">
-              <div>
-                <h2>{selectedBuilding.name}</h2>
-                <p>{selectedBuilding.rooms.length}教室</p>
-              </div>
-              <button
-                type="button"
-                className="close-button"
-                aria-label="詳細を閉じる"
-                onClick={() => {
-                  setSelectedBuildingId(null)
-                  setIsFormOpen(false)
-                  setDetailView('details')
-                  setSelectedRoomId(null)
-                }}
-              >×</button>
-            </div>
-
-            <div className="detail-content">
-              {detailView !== 'details' && selectedRoom ? (
-                <RoomReviews
-                  key={selectedRoom.id}
-                  roomId={selectedRoom.id}
-                  roomName={selectedRoom.name}
-                  mode={detailView}
-                  canPost={canPost}
-                  onLogin={() => {
-                    if (user && !canPost) {
-                      setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
-                    } else {
-                      openLogin({ type: 'review', buildingId: selectedBuilding.id, roomId: selectedRoom.id })
-                    }
-                  }}
-                  onBack={() => {
-                    setDetailView('details')
-                    setSelectedRoomId(null)
-                  }}
-                  onSubmitted={() => setDetailView('reviews')}
-                />
-              ) : isFormOpen && canPost ? (
-                <form className="add-form" onSubmit={handleAdd}>
-                  <h3>データを追加</h3>
-                  <label htmlFor="form-mode">追加するもの</label>
-                  <select id="form-mode" value={formMode} onChange={e => setFormMode(e.target.value)}>
-                    <option value="room">教室</option>
-                    <option value="outlet" disabled={!selectedBuilding.rooms.length}>コンセント</option>
-                  </select>
-
-                  {formMode === 'room' ? (
-                    <>
-                      <label htmlFor="room-name">教室名 *</label>
-                      <input
-                        id="room-name" name="name" required maxLength="80"
-                        placeholder="例：A102教室"
-                      />
-                      <label htmlFor="room-floor">階数</label>
-                      <input
-                        id="room-floor" name="floor" type="number"
-                        min="-10" max="40" step="1" placeholder="例：1"
-                      />
-                      <label htmlFor="room-location">場所の説明</label>
-                      <textarea id="room-location" name="location_detail" maxLength="300" rows="3" />
-                    </>
-                  ) : (
-                    <>
-                      <label htmlFor="outlet-room">教室 *</label>
-                      <select id="outlet-room" name="room_id" required>
-                        {selectedBuilding.rooms.map(room => (
-                          <option key={room.id} value={room.id}>{room.name}</option>
-                        ))}
-                      </select>
-                      <label htmlFor="outlet-location">コンセントの位置 *</label>
-                      <textarea
-                        id="outlet-location" name="location_detail" required
-                        maxLength="300" rows="3" placeholder="例：窓際の机の下"
-                      />
-                      <label htmlFor="outlet-ports">AC差込口数</label>
-                      <input
-                        id="outlet-ports" name="ac_ports" type="number"
-                        min="0" max="50" step="1" placeholder="例：2"
-                      />
-                    </>
-                  )}
-                  <p className="form-note">* 必須項目。登録した情報は他の利用者にも公開されます。</p>
-                  <button type="submit" className="save-button" disabled={saving}>
-                    {saving ? '保存中...' : '追加する'}
-                  </button>
-                </form>
-              ) : (
-                <>
-                  {selectedBuilding.rooms.length === 0 && <p>教室はまだ登録されていません。</p>}
-                  {selectedBuilding.rooms.map(room => (
-                    <section key={room.id} className="room-detail">
-                      <div className="room-heading">
-                        <h3>
-                          {room.name}
-                          {room.floor != null ? `（${room.floor}階）` : ''}
-                        </h3>
-                        <button
-                          type="button"
-                          className="write-review-button"
-                          disabled={!authReady}
-                          onClick={() => {
-                            setSelectedRoomId(room.id)
-                            setIsFormOpen(false)
-                            setDetailView('write')
-                            if (!canPost && !user) {
-                              openLogin({ type: 'review', buildingId: selectedBuilding.id, roomId: room.id })
-                            }
-                          }}
-                        >レビューを投稿</button>
-                      </div>
-                      <p>{room.location_detail}</p>
-
-                      {room.outlets.length === 0 ? (
-                        <p>コンセントは未登録です。</p>
-                      ) : (
-                        <ul>
-                          {room.outlets.map(outlet => (
-                            <li key={outlet.id}>
-                              <strong>{outlet.location_detail}</strong>
-                              <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <button
-                        type="button"
-                        className="review-list-link"
-                        onClick={() => {
-                          setSelectedRoomId(room.id)
-                          setIsFormOpen(false)
-                          setDetailView('reviews')
-                        }}
-                      >
-                        <span>この部屋のレビューを見る</span>
-                        <span aria-hidden="true">→</span>
-                      </button>
-                    </section>
-                  ))}
-                </>
-              )}
-            </div>
-
-            {detailView === 'details' && (
-              <div className="detail-footer">
-                <button
-                  type="button"
-                  className="add-button"
-                  disabled={!authReady}
-                  onClick={() => {
-                    setErrorMessage('')
-                    if (!canPost) {
-                      if (user) {
-                        setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
-                      } else {
-                        setIsFormOpen(false)
-                        openLogin({ type: 'add', buildingId: selectedBuilding.id })
-                      }
-                      return
-                    }
-                    setIsFormOpen(open => !open)
-                  }}
-                >
-                  {!authReady
-                    ? '確認中...'
-                    : !canPost
-                      ? 'ログインして追加'
-                      : isFormOpen
-                        ? 'キャンセル'
-                        : '＋ 追加'}
-                </button>
-              </div>
-            )}
-          </aside>
+          <BuildingDetailsPanel
+            building={selectedBuilding}
+            isMobile={isMobile}
+            snapPoints={sheetSnapPoints}
+            snapIndex={sheetSnapIndex}
+            onSnapIndexChange={setSheetSnapIndex}
+            onClose={closeDetails}
+            footer={renderDetailFooter()}
+          >
+            {renderDetailBody()}
+          </BuildingDetailsPanel>
         )}
       </main>
     </div>

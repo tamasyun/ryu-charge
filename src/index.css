@@ -1,8 +1,12 @@
+/* 文字・区切り線・通知の色を共通管理する。 */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
+  --text: #4b5563;
+  --text-h: #111827;
   --bg: #fff;
-  --border: #e5e4e7;
+  --border: #d5d7de;
+  --section-border: #b7bcc7;
+  --error: #b91c1c;
+  --success: #166534;
   --code-bg: #f4f3ec;
   --accent: #aa3bff;
   --accent-bg: rgba(170, 59, 255, 0.1);
@@ -15,10 +19,11 @@
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 18px/145% var(--sans);
+  font: 18px/1.55 var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
-  color: var(--text);
+  /* 本文は基本色、補足情報は --text を使う。 */
+  color: var(--text-h);
   background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -31,11 +36,15 @@
 }
 
 @media (prefers-color-scheme: dark) {
+  /* 暗い背景でも文字と境界線を見やすくする。 */
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
+    --text: #c6cbd4;
+    --text-h: #f9fafb;
     --bg: #16171d;
-    --border: #2e303a;
+    --border: #4b4f5b;
+    --section-border: #73798a;
+    --error: #fca5a5;
+    --success: #86efac;
     --code-bg: #1f2028;
     --accent: #c084fc;
     --accent-bg: rgba(192, 132, 252, 0.15);
@@ -52,6 +61,7 @@
 
 body {
   margin: 0;
+  touch-action: manipulation;
 }
 
 #root {
@@ -108,4 +118,13 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+/* キーボードで選択中の要素を示す。 */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
 }

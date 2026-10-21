@@ -1,0 +1,63 @@
+/* メール認証コードの入力画面。 */
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400 !important;
+  cursor: pointer;
+}
+
+.login-remember input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: #2563eb;
+}
+
+.login-remember-note {
+  margin-top: -8px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.login-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  font-size: 26px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.25em;
+  text-align: center;
+}
+
+.login-code-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.login-code-actions .login-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.login-destination {
+  overflow-wrap: anywhere;
+}
+
+.login-notice {
+  margin-top: 14px;
+  color: var(--success);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.login-privacy-note {
+  margin-top: 22px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}

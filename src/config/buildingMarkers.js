@@ -1,4 +1,3 @@
-
 import { icon } from 'leaflet'
 import buildingMarkerUrl from '../assets/markers/building-marker.svg'
 

@@ -1,4 +1,4 @@
-/* Only new auth styles. Existing map and review CSS are left untouched. */
+/* ヘッダーとログイン画面のスタイル。 */
 .app-header {
   display: flex;
   align-items: center;
@@ -23,7 +23,7 @@
 }
 
 .auth-restricted {
-  color: #b91c1c;
+  color: var(--error);
   font-size: 12px;
 }
 
@@ -53,10 +53,19 @@
   position: fixed;
   inset: 0;
   z-index: 2000;
+  background: rgb(0 0 0 / 55%);
+}
+
+.login-viewport {
+  box-sizing: border-box;
+  position: fixed;
+  inset: 0;
+  z-index: 2001;
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgb(0 0 0 / 55%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .login-dialog {
@@ -101,7 +110,7 @@
   background: var(--bg);
   color: var(--text-h);
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
 }
 .login-submit {
   padding: 12px;
@@ -126,7 +135,7 @@
   font-size: 14px;
   cursor: pointer;
 }
-.login-error { margin-top: 12px; color: #dc2626; font-size: 13px; overflow-wrap: anywhere; }
+.login-error { margin-top: 12px; color: var(--error); font-size: 13px; overflow-wrap: anywhere; }
 .review-login-required { display: grid; justify-items: start; gap: 16px; }
 .review-login-required p { font-size: 14px; }
 
