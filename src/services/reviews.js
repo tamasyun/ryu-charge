@@ -23,7 +23,7 @@ export async function uploadReviewImage(file) {
 export async function fetchReviews(roomId) {
   const { data, error } = await supabase
     .from('room_reviews')
-    .select('id, rating, comment, image_url, created_at')
+    .select('id, rating, comment, image_url, user_id, created_at') // user_id を追加
     .eq('room_id', roomId)
     .order('created_at', { ascending: false })
 
@@ -67,4 +67,33 @@ export async function fetchReviewOverview(roomIds) {
   }
 
   return byRoom
+}
+
+// src/services/reviews.js の一番下に追加
+export async function checkUserHasReviewed(roomId) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+
+  const { data, error } = await supabase
+    .from('room_reviews')
+    .select('id')
+    .eq('room_id', roomId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (error) {
+    console.error('投稿確認エラー:', error)
+    return false
+  }
+
+  return Boolean(data) // 既にレビューがあれば true、なければ false
+}
+
+export async function deleteReview(reviewId) {
+  const { error } = await supabase
+    .from('room_reviews')
+    .delete()
+    .eq('id', reviewId)
+
+  if (error) throw error
 }
