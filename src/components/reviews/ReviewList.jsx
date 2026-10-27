@@ -15,7 +15,9 @@ export default function ReviewList({ roomId }) {
         const reviews = await fetchReviews(roomId)
         if (active) setReviews(reviews)
       } catch (error) {
-        if (active) setErrorMessage(error instanceof Error ? error.message : '読み込みに失敗しました。')
+        // Supabase のエラーメッセージを正確に拾う
+        const msg = error?.message || (error instanceof Error ? error.message : '読み込みに失敗しました。')
+        if (active) setErrorMessage(msg)
       } finally {
         if (active) setLoading(false)
       }
@@ -47,9 +49,28 @@ export default function ReviewList({ roomId }) {
             </time>
           </div>
           <p>{review.comment}</p>
+
+          {/* 写真がある場合のみ表示（追加部分） */}
+          {review.image_url && (
+            <div style={{ marginTop: '8px' }}>
+              <a href={review.image_url} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={review.image_url}
+                  alt="レビュー写真"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '180px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    objectFit: 'cover',
+                    display: 'block'
+                  }}
+                />
+              </a>
+            </div>
+          )}
         </article>
       ))}
     </div>
   )
 }
-
