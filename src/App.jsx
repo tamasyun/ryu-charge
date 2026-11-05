@@ -6,12 +6,14 @@ import { isUniversityEmail } from './utils/universityEmail'
 import { readRedirectIntent, clearRedirectIntent } from './utils/authRedirect'
 import { useMediaQuery } from './hooks/useMediaQuery'
 import { useReviewOverview } from './hooks/useReviewOverview'
+import { useAccount } from './hooks/useAccount'
 import AddDataForm from './components/buildings/AddDataForm'
 import BuildingRooms from './components/buildings/BuildingRooms'
 import BuildingDetailsPanel from './components/buildings/BuildingDetailsPanel'
 import CampusMap from './components/map/CampusMap'
 import RoomReviews from './components/reviews/RoomReviews'
 import LoginDialog from './components/auth/LoginDialog'
+import ProfileDialog from './components/auth/ProfileDialog'
 
 // 小さい画面でもヘッダーと追加ボタンを同時に表示できる高さを確保する。
 const PORTRAIT_SNAP_POINTS = ['200px', 0.5, 0.85]
@@ -33,13 +35,18 @@ function App() {
   const [user, setUser] = useState(null)
   const [authReady, setAuthReady] = useState(false)
   const [isLoginOpen, setIsLoginOpen] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
+  const [dismissedProfileUserId, setDismissedProfileUserId] = useState(null)
   const loginReturnFocusRef = useRef(null)
   const [signingOut, setSigningOut] = useState(false)
   const [loginIntent, setLoginIntent] = useState(null)
   const [redirectIntent, setRedirectIntent] = useState(readRedirectIntent)
   const [reviewOverviewVersion, setReviewOverviewVersion] = useState(0)
 
-  const canPost = authReady && isUniversityEmail(user?.email)
+  const { profile, status: profileStatus, reloadProfile } = useAccount(user)
+  const hasUniversityEmail = isUniversityEmail(user?.email)
+  const canPost = authReady && hasUniversityEmail && profileStatus === 'ready'
+  const needsNickname = hasUniversityEmail && profileStatus === 'missing'
   const selectedBuilding =
     buildings.find(building => building.id === selectedBuildingId) ?? null
   const selectedRoom =
@@ -47,9 +54,15 @@ function App() {
   const reviewOverview = useReviewOverview(selectedBuilding, reviewOverviewVersion)
   const sheetSnapPoints = isLandscape ? LANDSCAPE_SNAP_POINTS : PORTRAIT_SNAP_POINTS
 
-  function openLogin(intent = null) {
+  function openLogin(intent = null, mode = 'login') {
     loginReturnFocusRef.current = document.activeElement
     setLoginIntent(intent)
+    if (user) {
+      setDismissedProfileUserId(null)
+      if (profileStatus === 'error') reloadProfile()
+      return
+    }
+    setAuthMode(mode)
     setIsLoginOpen(true)
   }
 
@@ -234,14 +247,14 @@ function App() {
             roomName={selectedRoom.name}
             mode={detailView}
             canPost={canPost}
-            authReady={authReady}
+            authReady={authReady && profileStatus !== 'loading'}
             isLoggedIn={Boolean(user)}
             onWrite={() => {
               setDetailView('write')
               setSheetSnapIndex(2)
             }}
             onLogin={() => {
-              if (user && !canPost) {
+              if (user && !hasUniversityEmail) {
                 setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
               } else {
                 openLogin({ type: 'review', buildingId: selectedBuilding.id, roomId: selectedRoom.id })
@@ -280,23 +293,30 @@ function App() {
     )
   }
 
+  function handleToggleAdd() {
+    setErrorMessage('')
+    if (!canPost) {
+      if (!hasUniversityEmail) {
+        setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
+      } else {
+        openLogin({ type: 'add', buildingId: selectedBuilding.id })
+      }
+      return
+    }
+    if (!isFormOpen) setSheetSnapIndex(2)
+    setIsFormOpen(open => !open)
+  }
+
   function renderDetailFooter() {
     return detailView === 'details' && authReady && user && (
       <div className="detail-footer">
         <button
           type="button"
           className="add-button"
-          onClick={() => {
-            setErrorMessage('')
-            if (!canPost) {
-              setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
-              return
-            }
-            if (!isFormOpen) setSheetSnapIndex(2)
-            setIsFormOpen(open => !open)
-          }}
+          disabled={profileStatus === 'loading'}
+          onClick={handleToggleAdd}
         >
-          {!canPost ? '追加できません' : isFormOpen ? 'キャンセル' : '＋ 追加'}
+          {!hasUniversityEmail ? '追加できません' : profileStatus === 'loading' ? '確認中...' : needsNickname ? 'ニックネームを設定' : isFormOpen ? 'キャンセル' : '＋ 追加'}
         </button>
       </div>
     )
@@ -311,26 +331,51 @@ function App() {
             <span className="auth-status">確認中...</span>
           ) : user ? (
             <>
-              <span className="auth-email" title={user.email}>{user.email}</span>
-              {!canPost && <span className="auth-restricted">大学メール以外は投稿不可</span>}
+              {profileStatus === 'ready' ? (
+                <span className="auth-nickname" title={profile.nickname}>{profile.nickname}</span>
+              ) : needsNickname ? (
+                <button type="button" className="auth-button" aria-label="ニックネームを設定" onClick={() => setDismissedProfileUserId(null)}>
+                  名前を設定
+                </button>
+              ) : profileStatus === 'error' ? (
+                <button type="button" className="auth-button" onClick={reloadProfile}>再試行</button>
+              ) : <span className="auth-status">{profileStatus === 'loading' ? '確認中...' : 'ログイン中'}</span>}
+              {!hasUniversityEmail && <span className="auth-restricted">大学メール以外は投稿不可</span>}
               <button type="button" className="auth-button" disabled={signingOut} onClick={handleSignOut}>
                 {signingOut ? '処理中...' : 'ログアウト'}
               </button>
             </>
           ) : (
-            <button type="button" className="auth-button" onClick={() => openLogin()}>
-              ログイン
-            </button>
+            <>
+              <button type="button" className="auth-button" onClick={() => openLogin()}>ログイン</button>
+              <button type="button" className="auth-button" onClick={() => openLogin(null, 'signup')}>新規登録</button>
+            </>
           )}
         </div>
       </header>
 
       <LoginDialog
+        key={authMode}
         open={isLoginOpen && !user}
+        initialMode={authMode}
         onClose={closeLogin}
         onAfterClose={restoreLoginFocus}
         returnFocusRef={loginReturnFocusRef}
       />
+
+      {user && (
+        <ProfileDialog
+          key={user.id}
+          open={needsNickname && dismissedProfileUserId !== user.id}
+          user={user}
+          onClose={() => setDismissedProfileUserId(user.id)}
+          onSaved={reloadProfile}
+        />
+      )}
+
+      {user && profileStatus === 'error' && (
+        <p role="alert" className="app-error">プロフィールを取得・保存できませんでした。「再試行」を押してください。</p>
+      )}
 
       {errorMessage && <p role="alert" className="app-error">{errorMessage}</p>}
 
