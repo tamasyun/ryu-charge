@@ -2,10 +2,14 @@ import { useEffect, useId, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { setKeepSignedIn, supabase } from '../../lib/supabase'
 import { isUniversityEmail } from '../../utils/universityEmail'
+import { createAccountService } from '../../services/account'
+import NicknameField from './NicknameField'
+import { isValidNickname } from '../../utils/nickname'
 import './LoginDialog.css'
 import './LoginDialogOtp.css'
 
 const REMEMBERED_EMAIL_KEY = 'ryu-charge:remembered-email'
+const account = createAccountService(supabase)
 
 function readRememberedEmail() {
   try {
@@ -28,25 +32,30 @@ function storeRememberedEmail(email, shouldRemember) {
   }
 }
 
-function authErrorMessage(error, action) {
+function authErrorMessage(error, action, mode) {
   if (error?.status === 429) {
     return '短時間に多くのリクエストがありました。しばらく待ってからお試しください。'
   }
   if (action === 'verify') {
     return '認証コードが正しくないか、有効期限が切れています。コードを確認するか再送信してください。'
   }
-  return error instanceof Error ? error.message : '認証メールを送信できませんでした。'
+  if (mode === 'login' && ['otp_disabled', 'user_not_found', 'signup_disabled'].includes(error?.code)) {
+    return '認証コードを送信できませんでした。登録がお済みでない場合は「新規登録」からお進みください。'
+  }
+  return '認証コードを送信できませんでした。入力内容と通信状況を確認して、もう一度お試しください。'
 }
 
-function LoginDialogContent({ onClose, returnFocusRef }) {
+function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
   const emailInputId = useId()
   const codeInputId = useId()
 
   const [email, setEmail] = useState(readRememberedEmail)
+  const [mode, setMode] = useState(initialMode)
+  const [nickname, setNickname] = useState('')
   const [rememberEmail, setRememberEmail] = useState(() => Boolean(readRememberedEmail()))
   const [keepSignedIn, setKeepSignedInChoice] = useState(true)
   const [step, setStep] = useState('email')
-  const [sentEmail, setSentEmail] = useState('')
+  const [sentRequest, setSentRequest] = useState(null)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -61,17 +70,9 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
     return () => window.clearTimeout(timer)
   }, [resendWait])
 
-  async function sendCode(targetEmail) {
-    const { error } = await supabase.auth.signInWithOtp({
-      email: targetEmail,
-      options: { shouldCreateUser: true },
-    })
-    if (error) throw error
-  }
-
   async function handleSend(event) {
     event.preventDefault()
-    if (busy) return
+    if (busy || resendWait > 0) return
 
     const normalizedEmail = email.trim().toLowerCase()
     setErrorMessage('')
@@ -82,18 +83,23 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
       return
     }
 
+    if (mode === 'signup' && !isValidNickname(nickname)) {
+      setErrorMessage('ニックネームを1〜20文字で入力してください。')
+      return
+    }
+
     setBusy(true)
     try {
-      await sendCode(normalizedEmail)
+      const request = { email: normalizedEmail, mode, nickname }
+      await account.sendCode(request)
       storeRememberedEmail(normalizedEmail, rememberEmail)
       setEmail(normalizedEmail)
-      setSentEmail(normalizedEmail)
+      setSentRequest(request)
       setCode('')
       setStep('code')
       setResendWait(60)
-      setNotice('認証コードを送信しました。メールをご確認ください。')
     } catch (error) {
-      setErrorMessage(authErrorMessage(error, 'send'))
+      setErrorMessage(authErrorMessage(error, 'send', mode))
     } finally {
       setBusy(false)
     }
@@ -112,12 +118,7 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
     setNotice('')
     try {
       setKeepSignedIn(keepSignedIn)
-      const { error } = await supabase.auth.verifyOtp({
-        email: sentEmail,
-        token: code,
-        type: 'email',
-      })
-      if (error) throw error
+      await account.verifyCode({ email: sentRequest.email, code })
       // 認証後の追加・レビュー画面の復元はApp.jsxで行う。
       onClose()
     } catch (error) {
@@ -133,12 +134,12 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
     setErrorMessage('')
     setNotice('')
     try {
-      await sendCode(sentEmail)
+      await account.sendCode(sentRequest)
       setCode('')
       setResendWait(60)
-      setNotice('新しい認証コードを送信しました。最新のメールをご確認ください。')
+      setNotice('認証コードを再送信しました。')
     } catch (error) {
-      setErrorMessage(authErrorMessage(error, 'send'))
+      setErrorMessage(authErrorMessage(error, 'send', sentRequest.mode))
     } finally {
       setBusy(false)
     }
@@ -152,19 +153,39 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
         : document.querySelector('.auth-button')}
     >
         <div className="login-dialog-header">
-          <Dialog.Title>{step === 'code' ? '認証コードを入力' : 'ログイン／新規登録'}</Dialog.Title>
+          <Dialog.Title>{step === 'code' ? '認証コードを入力' : mode === 'signup' ? '新規登録' : 'ログイン'}</Dialog.Title>
           <Dialog.Close
             type="button"
             className="login-close"
             aria-label="閉じる"
+            disabled={busy}
           >
             ×
           </Dialog.Close>
         </div>
 
+        {step === 'email' && (
+          <div className="auth-mode-switch" role="group" aria-label="認証方法">
+            {['login', 'signup'].map(value => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={mode === value}
+                disabled={busy}
+                onClick={() => { setMode(value); setErrorMessage(''); setNotice('') }}
+              >
+                {value === 'login' ? 'ログイン' : '新規登録'}
+              </button>
+            ))}
+          </div>
+        )}
+
         {step === 'email' ? (
           <form className="login-form" onSubmit={handleSend}>
             <p>琉球大学のメールアドレスに認証コードを送信します。</p>
+            {mode === 'signup' && (
+              <NicknameField value={nickname} onChange={setNickname} disabled={busy} autoFocus />
+            )}
             <label htmlFor={emailInputId}>メールアドレス</label>
             <input
               id={emailInputId}
@@ -175,11 +196,12 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
               onChange={event => setEmail(event.target.value)}
               disabled={busy}
               required
-              autoFocus
+              autoFocus={mode === 'login'}
             />
             <label className="login-remember">
               <input
                 type="checkbox"
+                disabled={busy}
                 checked={rememberEmail}
                 onChange={event => {
                   const checked = event.target.checked
@@ -187,16 +209,16 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
                   if (!checked) storeRememberedEmail('', false)
                 }}
               />
-              <span>このブラウザにメールアドレスを記憶する</span>
+              <span>メールアドレスを記憶する</span>
             </label>
-            <button type="submit" className="login-submit" disabled={busy}>
-              {busy ? '送信中...' : '認証コードを送信'}
+            <button type="submit" className="login-submit" disabled={busy || resendWait > 0}>
+              {busy ? '送信中...' : resendWait > 0 ? `送信まで ${resendWait}秒` : '認証コードを送信'}
             </button>
           </form>
         ) : (
           <form className="login-form" onSubmit={handleVerify}>
             <p>
-              <strong className="login-destination">{sentEmail}</strong>
+              <strong className="login-destination">{sentRequest.email}</strong>
               に届いた認証コードを入力してください。
               届かない場合は、迷惑メールフォルダをご確認ください。
             </p>
@@ -210,7 +232,7 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
               autoComplete="one-time-code"
               pattern="[0-9]{8}"
               maxLength={8}
-              placeholder="12345678"
+              placeholder="・・・・・・・・"
               value={code}
               onChange={event => {
                 setCode(event.target.value.replace(/\D/g, '').slice(0, 8))
@@ -234,7 +256,7 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
               className="login-submit"
               disabled={busy || code.length !== 8}
             >
-              {busy ? '確認中...' : 'ログイン／新規登録'}
+              {busy ? '確認中...' : sentRequest.mode === 'signup' ? '認証して登録' : 'ログイン'}
             </button>
             <div className="login-code-actions">
               <button
@@ -247,19 +269,6 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
                   ? `再送信まで ${resendWait}秒`
                   : '認証コードを再送信'}
               </button>
-              <button
-                className="login-secondary"
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setStep('email')
-                  setCode('')
-                  setErrorMessage('')
-                  setNotice('')
-                }}
-              >
-                メールアドレスを変更
-              </button>
             </div>
           </form>
         )}
@@ -270,7 +279,7 @@ function LoginDialogContent({ onClose, returnFocusRef }) {
   )
 }
 
-export default function LoginDialog({ open, onClose, onAfterClose, returnFocusRef }) {
+export default function LoginDialog({ open, initialMode = 'login', onClose, onAfterClose, returnFocusRef }) {
   return (
     <Dialog.Root
       open={open}
@@ -280,7 +289,7 @@ export default function LoginDialog({ open, onClose, onAfterClose, returnFocusRe
       <Dialog.Portal>
         <Dialog.Backdrop className="login-overlay" />
         <Dialog.Viewport className="login-viewport">
-          <LoginDialogContent onClose={onClose} returnFocusRef={returnFocusRef} />
+          <LoginDialogContent initialMode={initialMode} onClose={onClose} returnFocusRef={returnFocusRef} />
         </Dialog.Viewport>
       </Dialog.Portal>
     </Dialog.Root>

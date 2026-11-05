@@ -13,13 +13,55 @@
   min-width: 0;
 }
 
-.auth-email {
+.auth-nickname {
   max-width: 220px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--text);
   font-size: 13px;
+}
+
+.auth-mode-switch {
+  display: flex;
+  gap: 4px;
+  margin-top: 20px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--code-bg);
+}
+
+.auth-mode-switch button {
+  flex: 1;
+  padding: 9px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.auth-mode-switch button[aria-pressed='true'] {
+  color: var(--text-h);
+  background: var(--bg);
+  font-weight: 600;
+}
+
+.login-form .nickname-note {
+  margin: -6px 0 0;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.contributor-name {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 .auth-restricted {
@@ -141,7 +183,14 @@
 
 @media (max-width: 600px) {
   .app-header { padding: 12px; }
-  .auth-email { max-width: 110px; }
+  .auth-header { gap: 6px; }
+  .auth-button { padding: 9px 10px; }
+  .auth-nickname { max-width: 110px; }
   .auth-restricted { display: none; }
   .login-dialog { padding: 20px; }
+}
+
+@media (max-width: 360px) {
+  .app-header h1 { font-size: 22px; }
+  .auth-button { padding: 9px 8px; }
 }

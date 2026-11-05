@@ -1,37 +1,34 @@
 import { useEffect, useState } from 'react'
 import { fetchReviews, deleteReview } from '../../services/reviews'
 import { supabase } from '../../lib/supabase'
+import { authorLabel } from '../../utils/nickname'
 
 export default function ReviewList({ roomId, onDeleted }) {
-  const [reviews, setReviews] = useState([])
+  const [result, setResult] = useState(null)
+  const [revision, setRevision] = useState(0)
   const [currentUserId, setCurrentUserId] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [errorMessage, setErrorMessage] = useState('')
+  const current = result?.roomId === roomId && result.revision === revision ? result : null
+  const reviews = current?.reviews ?? []
+  const loading = !current
+  const errorMessage = current?.errorMessage
 
-  // ログイン中のユーザーIDを取得
+  // ログイン・ログアウト後も、自分の投稿にだけ削除ボタンを表示する。
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setCurrentUserId(data?.user?.id ?? null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUserId(session?.user?.id ?? null)
     })
+    return () => subscription.unsubscribe()
   }, [])
 
-  async function loadReviews() {
-    setLoading(true)
-    setErrorMessage('')
-    try {
-      const reviews = await fetchReviews(roomId)
-      setReviews(reviews)
-    } catch (error) {
-      const msg = error?.message || (error instanceof Error ? error.message : '読み込みに失敗しました。')
-      setErrorMessage(msg)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    loadReviews()
-  }, [roomId])
+    let active = true
+    fetchReviews(roomId).then(reviews => {
+      if (active) setResult({ roomId, revision, reviews })
+    }).catch(() => {
+      if (active) setResult({ roomId, revision, reviews: [], errorMessage: 'レビューを取得できませんでした。' })
+    })
+    return () => { active = false }
+  }, [roomId, revision])
 
   // 自分のレビューを削除する処理
   async function handleDelete(reviewId) {
@@ -39,7 +36,7 @@ export default function ReviewList({ roomId, onDeleted }) {
 
     try {
       await deleteReview(reviewId)
-      await loadReviews() // 画面の一覧を更新
+      setRevision(value => value + 1)
       onDeleted?.() // 親コンポーネントに削除を通知してボタンを復活させる
     } catch (error) {
       alert('削除に失敗しました: ' + (error?.message || 'エラー'))
@@ -64,6 +61,7 @@ export default function ReviewList({ roomId, onDeleted }) {
             <span className="review-stars" aria-label={`${review.rating}つ星`}>
               {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
             </span>
+            <span className="contributor-name">{authorLabel(review.author_nickname)}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <time dateTime={review.created_at}>
                 {new Date(review.created_at).toLocaleDateString('ja-JP')}

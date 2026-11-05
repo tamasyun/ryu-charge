@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { fetchAuthorNames } from './profiles'
 
 // 画像を Storage にアップロードして公開URLを取得する関数
 export async function uploadReviewImage(file) {
@@ -23,12 +24,13 @@ export async function uploadReviewImage(file) {
 export async function fetchReviews(roomId) {
   const { data, error } = await supabase
     .from('room_reviews')
-    .select('id, rating, comment, image_url, user_id, created_at') // user_id を追加
+    .select('id, rating, comment, image_url, user_id, created_at')
     .eq('room_id', roomId)
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data ?? []
+  const authorNames = await fetchAuthorNames((data ?? []).map(review => review.user_id))
+  return (data ?? []).map(review => ({ ...review, author_nickname: authorNames.get(review.user_id) }))
 }
 
 // レビュー作成（imageUrl を含めて保存）

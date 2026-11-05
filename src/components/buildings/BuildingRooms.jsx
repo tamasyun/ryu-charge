@@ -1,3 +1,5 @@
+import { authorLabel } from '../../utils/nickname'
+
 function reviewOverviewLabel(overview, buildingId, roomId) {
   if (overview.buildingId !== buildingId || overview.status === 'loading') {
     return '概要を読み込み中...'
@@ -17,6 +19,7 @@ export default function BuildingRooms({ building, reviewOverview, onShowReviews 
           <h3>
             {room.name}
             {room.floor != null ? `（${room.floor}階）` : ''}
+            <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
           </h3>
           <p>{room.location_detail}</p>
 
@@ -27,7 +30,10 @@ export default function BuildingRooms({ building, reviewOverview, onShowReviews 
               {room.outlets.map(outlet => (
                 <li key={outlet.id}>
                   <strong>{outlet.location_detail}</strong>
-                  <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
+                  <div>
+                    <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
+                    <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
+                  </div>
                 </li>
               ))}
             </ul>
