@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { supabase } from '../../lib/supabase'
 import { createAccountService } from '../../services/account'
@@ -12,24 +12,37 @@ import './AccountSettingsDialog.css'
 const account = createAccountService(supabase)
 const passkeys = createPasskeyService(supabase)
 const deletion = createAccountDeletionService(supabase)
+const titles = { menu: 'アカウント設定', nickname: 'ユーザー名変更', passkeys: 'パスキー管理', delete: 'アカウント削除' }
 
 function PasskeyRow({ passkey, busy, onRename, onRemove }) {
   const id = useId()
   const [name, setName] = useState(passkey.friendly_name ?? '')
+  const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  async function save(event) {
+    event.preventDefault()
+    if (await onRename(passkey.id, name)) setEditing(false)
+  }
+
   return <li className="account-passkey">
-    <form className="account-form" onSubmit={event => { event.preventDefault(); onRename(passkey.id, name) }}>
+    <h3>{passkey.friendly_name || 'パスキー'}</h3>
+    <small>登録日：{new Date(passkey.created_at).toLocaleDateString('ja-JP')}
+      {passkey.last_used_at && ` ／ 最終使用：${new Date(passkey.last_used_at).toLocaleDateString('ja-JP')}`}</small>
+    {editing ? <form className="account-form" onSubmit={save}>
       <label htmlFor={id}>パスキーの名前</label>
-      <input id={id} value={name} onChange={event => setName(event.target.value)} disabled={busy} placeholder="端末の名前" />
-      <small>登録日：{new Date(passkey.created_at).toLocaleDateString('ja-JP')}
-        {passkey.last_used_at && ` ／ 最終使用：${new Date(passkey.last_used_at).toLocaleDateString('ja-JP')}`}</small>
+      <input id={id} value={name} onChange={event => setName(event.target.value)} disabled={busy} placeholder="端末の名前" autoFocus />
       <div className="account-actions">
         <button className="auth-button" disabled={busy || !name.trim()}>名前を保存</button>
-        <button className="auth-button" type="button" disabled={busy} onClick={() => setConfirmDelete(true)}>パスキーを削除</button>
+        <button className="auth-button" type="button" disabled={busy} onClick={() => setEditing(false)}>キャンセル</button>
       </div>
-    </form>
+    </form> : <div className="account-actions">
+      <button className="auth-button" disabled={busy || confirmDelete}
+        onClick={() => { setName(passkey.friendly_name ?? ''); setEditing(true) }}>名前を変更</button>
+      <button className="auth-button" disabled={busy || confirmDelete} onClick={() => setConfirmDelete(true)}>パスキーを削除</button>
+    </div>}
     {confirmDelete && <div className="account-confirm">
-      <p>このパスキーを削除しますか？削除後もメール認証でログインできます。</p>
+      <p>このパスキーを削除しますか？</p>
       <div className="account-actions">
         <button className="account-delete-button" disabled={busy} onClick={() => onRemove(passkey.id)}>このパスキーの削除を確定</button>
         <button className="auth-button" disabled={busy} onClick={() => setConfirmDelete(false)}>キャンセル</button>
@@ -39,6 +52,8 @@ function PasskeyRow({ passkey, busy, onRename, onRemove }) {
 }
 
 function SettingsContent({ user, profile, busy, setBusy, onSaved, onDeleted }) {
+  const [view, setView] = useState('menu')
+  const titleRef = useRef(null)
   const [nickname, setNickname] = useState(profile.nickname)
   const [items, setItems] = useState(null)
   const [passkeyError, setPasskeyError] = useState('')
@@ -47,15 +62,32 @@ function SettingsContent({ user, profile, busy, setBusy, onSaved, onDeleted }) {
   const [pending, setPending] = useState(false)
 
   useEffect(() => {
+    titleRef.current?.focus()
+  }, [view])
+
+  useEffect(() => {
     let active = true
-    passkeys.list().then(data => { if (active) setItems(data) }).catch(() => {
-      if (active) setPasskeyError('パスキー一覧を取得できませんでした。Supabaseのパスキー設定もご確認ください。')
-    })
     deletion.status().then(data => { if (active) setPending(Boolean(data?.pending)) }).catch(() => {
       // 削除用サーバーが未配備でも、名前変更・パスキー管理は利用できる。
     })
     return () => { active = false }
   }, [])
+
+  useEffect(() => {
+    if (view !== 'passkeys') return undefined
+    let active = true
+    passkeys.list().then(data => { if (active) setItems(data) }).catch(() => {
+      if (active) setPasskeyError('パスキー一覧を取得できませんでした。')
+    })
+    return () => { active = false }
+  }, [view])
+
+  function navigate(next) {
+    setError('')
+    setNotice('')
+    setPasskeyError('')
+    setView(next)
+  }
 
   async function saveNickname(event) {
     event.preventDefault()
@@ -69,12 +101,12 @@ function SettingsContent({ user, profile, busy, setBusy, onSaved, onDeleted }) {
       onSaved(updated)
       setNotice('ユーザー名を保存しました。')
     } catch {
-      setError('ユーザー名を保存できませんでした。1〜20文字の入力と通信状況をご確認ください。')
+      setError('ユーザー名を保存できませんでした。もう一度お試しください。')
     } finally { setBusy(false) }
   }
 
   async function changePasskey(action, message) {
-    if (busy || pending) return
+    if (busy || pending) return false
     setBusy(true)
     setPasskeyError('')
     setNotice('')
@@ -83,31 +115,43 @@ function SettingsContent({ user, profile, busy, setBusy, onSaved, onDeleted }) {
       await action()
       setItems(await passkeys.list())
       setNotice(message)
+      return true
     } catch (error) {
       setPasskeyError(passkeyErrorMessage(error))
+      return false
     } finally { setBusy(false) }
   }
 
   return <>
-    {pending && <p className="login-error" role="alert">アカウントの削除処理が途中です。下の本人確認から削除を再試行してください。新しい投稿や設定変更はできません。</p>}
-    <section className="account-section" aria-label="ユーザー名変更">
-      <h3>ユーザー名変更</h3>
+    <div className="login-dialog-header">
+      <div className="account-title">
+        {view !== 'menu' && <button type="button" className="account-back" disabled={busy}
+          aria-label="アカウント設定に戻る" onClick={() => navigate('menu')}>‹</button>}
+        <Dialog.Title ref={titleRef} tabIndex={-1}>{titles[view]}</Dialog.Title>
+      </div>
+      <Dialog.Close className="login-close" disabled={busy} aria-label="閉じる">×</Dialog.Close>
+    </div>
+    {pending && <p className="login-error" role="alert">削除処理が途中です。「アカウント削除」から再試行してください。</p>}
+    {view === 'menu' && <nav className="account-menu" aria-label="アカウント設定の項目">
+      {['nickname', 'passkeys', 'delete'].map(item => <button key={item} type="button"
+        disabled={busy || (pending && item !== 'delete')} className={item === 'delete' ? 'account-menu-danger' : ''}
+        onClick={() => navigate(item)}>{titles[item]}<span aria-hidden="true">›</span></button>)}
+    </nav>}
+    {view === 'nickname' && <section className="account-section" aria-label="ユーザー名変更">
       <form className="account-form" onSubmit={saveNickname}>
         <NicknameField value={nickname} onChange={setNickname} disabled={busy || pending} />
         <button className="login-submit" disabled={busy || pending || !isValidNickname(nickname)}>ユーザー名を保存</button>
       </form>
       {error && <p className="login-error" role="alert">{error}</p>}
-    </section>
-    <section className="account-section" aria-label="パスキー管理">
-      <h3>パスキー管理</h3>
-      <p>Face ID・Touch ID・Windows Helloなど、端末の確認方法でログインできます。秘密鍵は端末やパスワード管理サービスが管理します。</p>
+    </section>}
+    {view === 'passkeys' && <section className="account-section" aria-label="パスキー管理">
       <button className="auth-button" disabled={busy || pending || !supportsPasskeys()}
         onClick={() => changePasskey(() => passkeys.register(), 'パスキーを登録しました。')}>
         パスキーを登録
       </button>
-      {!supportsPasskeys() && <p>この環境ではパスキー登録を利用できません。対応ブラウザーからHTTPSで開いてください。</p>}
+      {!supportsPasskeys() && <p>この環境ではパスキーを利用できません。</p>}
       {items?.length === 0 && <p>登録済みのパスキーはありません。</p>}
-      {items === null && !passkeyError && <p role="status">パスキーを確認中...</p>}
+      {items === null && !passkeyError && <p role="status">読み込み中...</p>}
       <ul className="account-passkeys">
         {(items ?? []).map(item => <PasskeyRow key={item.id} passkey={item} busy={busy || pending}
           onRename={(id, name) => changePasskey(() => passkeys.rename(id, name), 'パスキーの名前を保存しました。')}
@@ -116,9 +160,9 @@ function SettingsContent({ user, profile, busy, setBusy, onSaved, onDeleted }) {
       {passkeyError && <p className="login-error" role="alert">{passkeyError}</p>}
       {passkeyError && <button className="auth-button" disabled={busy || pending}
         onClick={() => changePasskey(() => Promise.resolve(), '一覧を更新しました。')}>一覧を再取得</button>}
-    </section>
+    </section>}
     {notice && <p role="status" className="login-notice">{notice}</p>}
-    <DeleteAccountForm user={user} busy={busy} setBusy={setBusy} onDeleted={onDeleted} onPending={() => setPending(true)} />
+    {view === 'delete' && <DeleteAccountForm user={user} busy={busy} setBusy={setBusy} onDeleted={onDeleted} onPending={() => setPending(true)} />}
   </>
 }
 
@@ -128,12 +172,7 @@ export default function AccountSettingsDialog({ open, user, profile, onClose, on
     <Dialog.Portal>
       <Dialog.Backdrop className="login-overlay" />
       <Dialog.Viewport className="login-viewport">
-        <Dialog.Popup className="login-dialog account-dialog" finalFocus={returnFocusRef}>
-          <div className="login-dialog-header">
-            <Dialog.Title>アカウント設定</Dialog.Title>
-            <Dialog.Close className="login-close" disabled={busy} aria-label="閉じる">×</Dialog.Close>
-          </div>
-          <Dialog.Description className="account-description">ユーザー名・ログイン方法・アカウントを管理します。</Dialog.Description>
+        <Dialog.Popup className="login-dialog account-dialog" finalFocus={returnFocusRef} aria-describedby={undefined}>
           <SettingsContent user={user} profile={profile} busy={busy} setBusy={setBusy} onSaved={onSaved} onDeleted={onDeleted} />
         </Dialog.Popup>
       </Dialog.Viewport>

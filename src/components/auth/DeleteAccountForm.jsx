@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Turnstile } from '@marsidev/react-turnstile'
+import SecurityChallenge from './SecurityChallenge'
 import { supabase, clearDeletedAccountSession } from '../../lib/supabase'
 import { createAccountService } from '../../services/account'
 import { createAccountDeletionService } from '../../services/accountDeletion'
@@ -19,7 +19,6 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [captchaToken, setCaptchaToken] = useState('')
-  const [captchaError, setCaptchaError] = useState('')
   const captchaRef = useRef(null)
 
   useEffect(() => {
@@ -30,7 +29,7 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
 
   function invalidateCaptcha() {
     setCaptchaToken('')
-    setCaptchaError('セキュリティ確認を完了できませんでした。再確認するか、ページを再読み込みしてください。')
+    setError('セキュリティ確認を完了してください。')
   }
 
   async function sendCode() {
@@ -50,7 +49,6 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
       setCodeSent(true)
       setCode('')
       setWait(60)
-      setMessage('本人確認用の認証コードを送信しました。')
     } catch (error) {
       setError(error?.code === 'captcha_failed'
         ? 'セキュリティ確認に失敗しました。繰り返し失敗する場合は管理者にお問い合わせください。'
@@ -70,7 +68,7 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
       const result = await deletion.verifyCode(code)
       setProof(result.proof)
       setCode('')
-      setMessage('本人確認が完了しました。5分以内に最終確認を行ってください。')
+      setMessage('本人確認済み（有効期限5分）')
     } catch (error) {
       setError(error.message)
     } finally {
@@ -107,19 +105,12 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
   }
 
   return (
-    <section className="account-section account-danger" aria-labelledby={`${id}-title`}>
-      <h3 id={`${id}-title`}>アカウント削除</h3>
-      <p>アカウント、プロフィール、パスキー、本人のレビューと写真を削除します。教室とコンセントの設備情報は投稿者の情報を外して残します。</p>
+    <section className="account-section account-danger" aria-label="アカウント削除">
+      <p>アカウントとパスキー、レビュー、写真を削除します。教室・コンセント情報は投稿者名を外して残します。</p>
       {!proof ? <>
-        <p>削除前に、<strong className="login-destination">{user.email}</strong>へ届く8桁のコードで本人確認します。</p>
-        {siteKey && <div className="login-captcha">
-          <Turnstile ref={captchaRef} siteKey={siteKey}
-            options={{ language: 'ja', size: 'compact', responseField: false, refreshExpired: 'auto' }}
-            onSuccess={token => { setCaptchaToken(token); setCaptchaError('') }}
-            onExpire={invalidateCaptcha} onError={invalidateCaptcha} onTimeout={invalidateCaptcha}
-            onUnsupported={invalidateCaptcha} scriptOptions={{ onError: invalidateCaptcha }} />
-          {captchaError && <p role="alert" className="login-error">{captchaError}</p>}
-        </div>}
+        <p><strong className="login-destination">{user.email}</strong>に届く8桁のコードで本人確認します。</p>
+        {siteKey && <SecurityChallenge siteKey={siteKey} widgetRef={captchaRef}
+          onTokenChange={setCaptchaToken} />}
         <button className="auth-button" type="button" onClick={sendCode}
           disabled={busy || wait > 0 || Boolean(siteKey && !captchaToken)}>
           {wait > 0 ? `再送信まで ${wait}秒` : codeSent ? '削除用コードを再送信' : '削除用コードを送信'}
@@ -132,7 +123,7 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
           <button className="auth-button" disabled={busy || code.length !== 8}>本人確認を完了する</button>
         </form>}
       </> : <form className="account-form" onSubmit={remove}>
-        <p>この操作は取り消せません。途中で写真の削除などが失敗した場合も、同じ画面から削除を再試行できます。</p>
+        <p>この操作は取り消せません。</p>
         <label className="login-remember">
           <input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} disabled={busy} />
           <span>削除対象と、設備情報が残ることを確認しました</span>

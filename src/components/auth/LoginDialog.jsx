@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
-import { Turnstile } from '@marsidev/react-turnstile'
 import { setKeepSignedIn, supabase } from '../../lib/supabase'
 import { isUniversityEmail } from '../../utils/universityEmail'
 import { createAccountService } from '../../services/account'
 import { createPasskeyService, passkeyErrorMessage, supportsPasskeys } from '../../services/passkeys'
 import NicknameField from './NicknameField'
+import SecurityChallenge from './SecurityChallenge'
 import { isValidNickname } from '../../utils/nickname'
 import './LoginDialog.css'
 import './LoginDialogOtp.css'
@@ -72,8 +72,6 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   const [resendWait, setResendWait] = useState(0)
   const captchaRef = useRef(null)
   const [captchaToken, setCaptchaToken] = useState('')
-  const [captchaError, setCaptchaError] = useState('')
-  const [captchaLoadFailed, setCaptchaLoadFailed] = useState(false)
   const captchaPending = Boolean(turnstileSiteKey) && !captchaToken
 
   function resetCaptcha() {
@@ -84,16 +82,11 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   function canSendWithCaptcha() {
     if (!turnstileSiteKey) return true
     if (!captchaToken || captchaRef.current?.isExpired()) {
-      setCaptchaError('セキュリティ確認を完了してから送信してください。')
+      setErrorMessage('セキュリティ確認を完了してください。')
       resetCaptcha()
       return false
     }
     return true
-  }
-
-  function handleCaptchaError() {
-    setCaptchaToken('')
-    setCaptchaError('セキュリティ確認を読み込めないか、確認に失敗しました。通信環境を確認し、確認をやり直してください。')
   }
 
   useEffect(() => {
@@ -182,7 +175,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
     const token = captchaToken
     setCaptchaToken('')
     try {
-      setKeepSignedIn(keepSignedIn)
+      setKeepSignedIn(true)
       await passkeys.signIn(token)
       onClose()
     } catch (error) {
@@ -216,42 +209,8 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   }
 
   const captcha = turnstileSiteKey && (
-    <div className="login-captcha">
-      <Turnstile
-        ref={captchaRef}
-        siteKey={turnstileSiteKey}
-        options={{ language: 'ja', size: 'compact', responseField: false, refreshExpired: 'auto', refreshTimeout: 'auto' }}
-        onSuccess={token => {
-          setCaptchaToken(token)
-          setCaptchaError('')
-          setCaptchaLoadFailed(false)
-        }}
-        onExpire={() => {
-          setCaptchaToken('')
-          setCaptchaError('セキュリティ確認の有効期限が切れました。もう一度確認してください。')
-        }}
-        onError={handleCaptchaError}
-        onTimeout={handleCaptchaError}
-        onUnsupported={handleCaptchaError}
-        scriptOptions={{ onError: () => {
-          setCaptchaToken('')
-          setCaptchaLoadFailed(true)
-          setCaptchaError('セキュリティ確認を読み込めませんでした。通信環境を確認してページを再読み込みしてください。')
-        } }}
-      />
-      {captchaError && <p className="login-error" role="alert">{captchaError}</p>}
-      {captchaPending && !captchaError && (
-        <p role="status">認証コードの送信・再送信にはセキュリティ確認が必要です。</p>
-      )}
-      {!captchaLoadFailed && <button
-        type="button"
-        className="login-secondary"
-        disabled={busy}
-        onClick={() => { setCaptchaError(''); resetCaptcha() }}
-      >
-        セキュリティ確認をやり直す
-      </button>}
-    </div>
+    <SecurityChallenge siteKey={turnstileSiteKey} widgetRef={captchaRef}
+      onTokenChange={setCaptchaToken} />
   )
 
   return (
@@ -291,11 +250,10 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
 
         {step === 'email' ? (
           <form className="login-form" onSubmit={handleSend}>
-            <p>琉球大学のメールアドレスに認証コードを送信します。</p>
             {mode === 'signup' && (
               <NicknameField value={nickname} onChange={setNickname} disabled={busy} autoFocus />
             )}
-            <label htmlFor={emailInputId}>メールアドレス</label>
+            <label htmlFor={emailInputId}>大学のメールアドレス</label>
             <input
               id={emailInputId}
               type="email"
@@ -325,11 +283,6 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
               {busy ? '送信中...' : resendWait > 0 ? `送信まで ${resendWait}秒` : '認証コードを送信'}
             </button>
             {mode === 'login' && <>
-              <label className="login-remember">
-                <input type="checkbox" checked={keepSignedIn} disabled={busy}
-                  onChange={event => setKeepSignedInChoice(event.target.checked)} />
-                <span>ログイン状態を保持する</span>
-              </label>
               <button type="button" className="auth-button" onClick={handlePasskeyLogin}
                 disabled={busy || captchaPending || !supportsPasskeys()}>
                 パスキーでログイン
@@ -341,8 +294,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
           <form className="login-form" onSubmit={handleVerify}>
             <p>
               <strong className="login-destination">{sentRequest.email}</strong>
-              に届いた認証コードを入力してください。
-              届かない場合は、迷惑メールフォルダをご確認ください。
+              に届いた8桁のコードを入力してください。
             </p>
             <label htmlFor={codeInputId}>認証コード</label>
             <input

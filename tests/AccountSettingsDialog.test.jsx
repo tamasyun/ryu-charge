@@ -42,7 +42,10 @@ beforeEach(async () => {
     mock.keys.push({ id: 'key-2', friendly_name: 'Mac', created_at: '2026-11-06T00:00:00Z' })
     return { data: mock.keys[1], error: null }
   })
-  mock.rename.mockResolvedValue({ error: null })
+  mock.rename.mockImplementation(async ({ passkeyId, friendlyName }) => {
+    mock.keys = mock.keys.map(key => key.id === passkeyId ? { ...key, friendly_name: friendlyName } : key)
+    return { error: null }
+  })
   mock.remove.mockImplementation(async ({ passkeyId }) => {
     mock.keys = mock.keys.filter(key => key.id !== passkeyId)
     return { error: null }
@@ -57,13 +60,17 @@ beforeEach(async () => {
 
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
-async function open() {
+async function open(section) {
   const props = { open: true, user, profile, onClose: vi.fn(), onSaved: vi.fn(), onDeleted: vi.fn(), returnFocusRef: { current: null } }
   await act(async () => render(<AccountSettingsDialog {...props} />))
+  if (section) await act(async () => fireEvent.click(screen.getByRole('button', { name: section, exact: true })))
   return props
 }
 
 async function verifyDeletion() {
+  if (screen.queryByRole('button', { name: 'アカウント削除', exact: true })) {
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'アカウント削除', exact: true })))
+  }
   act(() => mock.captcha.onSuccess('deletion-captcha'))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: '削除用コードを送信' })))
   fireEvent.change(screen.getByLabelText('削除用の認証コード'), { target: { value: '12345678' } })
@@ -76,7 +83,7 @@ function confirmDeletion() {
 }
 
 it('saves the normalized nickname and notifies the header/author consumers', async () => {
-  const props = await open()
+  const props = await open('ユーザー名変更')
   fireEvent.change(screen.getByLabelText('ニックネーム'), { target: { value: '　新しい名前　' } })
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'ユーザー名を保存' })))
   expect(props.onSaved).toHaveBeenCalledWith({ id: user.id, nickname: '新しい名前' })
@@ -84,7 +91,7 @@ it('saves the normalized nickname and notifies the header/author consumers', asy
 })
 
 it('invalid nickname and failed RLS updates do not report a saved profile', async () => {
-  const props = await open()
+  const props = await open('ユーザー名変更')
   fireEvent.change(screen.getByLabelText('ニックネーム'), { target: { value: 'あ'.repeat(21) } })
   expect(screen.getByRole('button', { name: 'ユーザー名を保存' }).disabled).toBe(true)
   fireEvent.change(screen.getByLabelText('ニックネーム'), { target: { value: '名前' } })
@@ -95,23 +102,25 @@ it('invalid nickname and failed RLS updates do not report a saved profile', asyn
 })
 
 it('registers, lists, renames and explicitly confirms removal of a passkey', async () => {
-  await open()
-  expect(screen.getByDisplayValue('iPhone')).toBeTruthy()
+  await open('パスキー管理')
+  expect(screen.getByRole('heading', { name: 'iPhone' })).toBeTruthy()
+  expect(screen.queryByLabelText('パスキーの名前')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '名前を変更' }))
   fireEvent.change(screen.getByLabelText('パスキーの名前'), { target: { value: '　自分の端末　' } })
   await act(async () => fireEvent.click(screen.getByRole('button', { name: '名前を保存' })))
   expect(mock.rename).toHaveBeenCalledWith({ passkeyId: 'key-1', friendlyName: '自分の端末' })
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'パスキーを登録' })))
   expect(mock.register).toHaveBeenCalledTimes(1)
-  expect(screen.getByDisplayValue('Mac')).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'Mac' })).toBeTruthy()
   fireEvent.click(screen.getAllByRole('button', { name: 'パスキーを削除' })[0])
   expect(mock.remove).not.toHaveBeenCalled()
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'このパスキーの削除を確定' })))
   expect(mock.remove).toHaveBeenCalledWith({ passkeyId: 'key-1' })
-  expect(screen.queryByDisplayValue('自分の端末')).toBeNull()
+  expect(screen.queryByRole('heading', { name: '自分の端末' })).toBeNull()
 })
 
 it('cancelled manual registration preserves the account and allows another button attempt', async () => {
-  const props = await open()
+  const props = await open('パスキー管理')
   mock.register.mockResolvedValueOnce({ error: { name: 'NotAllowedError' } })
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'パスキーを登録' })))
   expect(screen.getByRole('alert').textContent).toContain('キャンセル')
@@ -121,7 +130,7 @@ it('cancelled manual registration preserves the account and allows another butto
 })
 
 it('requires CAPTCHA, a fresh eight-digit OTP and two explicit final confirmations for account deletion', async () => {
-  const props = await open()
+  const props = await open('アカウント削除')
   expect(screen.getByRole('button', { name: '削除用コードを送信' }).disabled).toBe(true)
   expect(screen.queryByRole('button', { name: 'アカウントを完全に削除する' })).toBeNull()
   await verifyDeletion()
@@ -146,9 +155,11 @@ it('Storage deletion failure retains the session and permits a retry; settings a
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'アカウントを完全に削除する' })))
   expect(mock.clearSession).not.toHaveBeenCalled()
   expect(props.onDeleted).not.toHaveBeenCalled()
-  expect(screen.getByRole('button', { name: 'ユーザー名を保存' }).disabled).toBe(true)
-  expect(screen.getByRole('button', { name: 'パスキーを登録' }).disabled).toBe(true)
   expect(screen.getByRole('button', { name: 'アカウントを完全に削除する' }).disabled).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'アカウント設定に戻る' }))
+  expect(screen.getByRole('button', { name: 'ユーザー名変更' }).disabled).toBe(true)
+  expect(screen.getByRole('button', { name: 'パスキー管理' }).disabled).toBe(true)
+  expect(screen.getByRole('button', { name: 'アカウント削除', exact: true }).disabled).toBe(false)
 })
 
 it('expired deletion proof returns to OTP verification without logging out', async () => {
@@ -169,4 +180,24 @@ it('lost or expired session clears browser credentials without claiming the dele
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'アカウントを完全に削除する' })))
   expect(mock.clearSession).toHaveBeenCalledTimes(1)
   expect(props.onDeleted).toHaveBeenCalledWith(false)
+})
+
+
+it('opens an item menu first and shows only the selected settings screen', async () => {
+  await open()
+  expect(screen.getByRole('navigation', { name: 'アカウント設定の項目' })).toBeTruthy()
+  expect(screen.queryByLabelText('ニックネーム')).toBeNull()
+  expect(screen.queryByTestId('captcha')).toBeNull()
+  expect(mock.list).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'ユーザー名変更' }))
+  expect(screen.getByRole('heading', { name: 'ユーザー名変更' })).toBe(document.activeElement)
+  expect(screen.getByLabelText('ニックネーム')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'パスキーを登録' })).toBeNull()
+  expect(screen.queryByTestId('captcha')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'アカウント設定に戻る' }))
+  expect(screen.getByRole('heading', { name: 'アカウント設定' })).toBe(document.activeElement)
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'パスキー管理' })))
+  expect(screen.getByRole('heading', { name: 'iPhone' })).toBeTruthy()
+  expect(screen.queryByLabelText('ニックネーム')).toBeNull()
+  expect(screen.queryByTestId('captcha')).toBeNull()
 })

@@ -53,7 +53,7 @@ function openDialog(initialMode = 'login') {
   const onClose = vi.fn()
   const props = { open: true, initialMode, onClose, onAfterClose: vi.fn(), returnFocusRef: { current: null }, onPasskeyNotice: vi.fn() }
   const view = render(<LoginDialog {...props} />)
-  fireEvent.change(screen.getByLabelText('メールアドレス'), { target: { value: email } })
+  fireEvent.change(screen.getByLabelText('大学のメールアドレス'), { target: { value: email } })
   if (initialMode === 'signup') {
     fireEvent.change(screen.getByLabelText('ニックネーム'), { target: { value: '　りゅう　' } })
   }
@@ -76,6 +76,31 @@ async function finishCooldown() {
 }
 
 describe('Turnstile-protected email OTP', () => {
+  it('keeps the healthy challenge free of extra instructions and retry buttons', () => {
+    openDialog()
+    expect(screen.queryByRole('button', { name: '再試行' })).toBeNull()
+    expect(screen.queryByText('認証コードの送信・再送信にはセキュリティ確認が必要です。')).toBeNull()
+  })
+
+  it('fits the challenge to its container and invalidates tokens when the widget is recreated', () => {
+    let resize
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback) { resize = callback }
+      observe() {}
+      disconnect() {}
+    })
+    openDialog()
+    act(() => resize([{ contentRect: { width: 308 } }]))
+    expect(captcha.props.options.size).toBe('flexible')
+    solve('wide-token')
+    act(() => resize([{ contentRect: { width: 238 } }]))
+    expect(captcha.props.options.size).toBe('compact')
+    act(() => captcha.props.onWidgetLoad('new-widget'))
+    expect(screen.getByRole('button', { name: '認証コードを送信' }).disabled).toBe(true)
+    solve('narrow-token')
+    expect(screen.getByRole('button', { name: '認証コードを送信' }).disabled).toBe(false)
+  })
+
   it.each(['login', 'signup'])('%s requires a solved CAPTCHA and sends its token', async mode => {
     openDialog(mode)
     const button = screen.getByRole('button', { name: '認証コードを送信' })
@@ -104,10 +129,15 @@ describe('Turnstile-protected email OTP', () => {
     solve('old-token')
     act(() => captcha.props[callback]())
     expect(screen.getByRole('button', { name: '認証コードを送信' }).disabled).toBe(true)
-    expect(screen.getByRole('alert').textContent).toContain('セキュリティ確認')
-    fireEvent.click(screen.getByRole('button', { name: 'セキュリティ確認をやり直す' }))
-    expect(captcha.reset).toHaveBeenCalled()
+    expect(captcha.props.options).toMatchObject({ retry: 'auto', refreshExpired: 'auto', refreshTimeout: 'auto' })
+    if (callback === 'onUnsupported') {
+      expect(screen.getByRole('alert').textContent).toContain('このブラウザーでは')
+    } else {
+      expect(screen.queryByRole('alert')).toBeNull()
+    }
+    expect(screen.queryByRole('button', { name: '再試行' })).toBeNull()
     solve('new-token')
+    expect(screen.queryByRole('alert')).toBeNull()
     await send()
     expect(auth.signInWithOtp.mock.calls[0][0].options.captchaToken).toBe('new-token')
   })
@@ -128,7 +158,7 @@ describe('Turnstile-protected email OTP', () => {
     act(() => captcha.props.scriptOptions.onError())
     expect(screen.getByRole('button', { name: '認証コードを送信' }).disabled).toBe(true)
     expect(screen.getByRole('alert').textContent).toContain('ページを再読み込み')
-    expect(screen.queryByRole('button', { name: 'セキュリティ確認をやり直す' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '再試行' })).toBeNull()
   })
 
   it.each([
@@ -246,16 +276,16 @@ describe('passkey login and direct signup enrollment', () => {
     Object.defineProperty(window.navigator, 'credentials', { configurable: true, value: { create() {}, get() {} } })
   }
 
-  it('requires CAPTCHA for passkey login and keeps the selected persistence preference', async () => {
+  it('requires CAPTCHA for passkey login and always persists its session without a checkbox', async () => {
     enableWebAuthn()
     const view = openDialog()
     const button = screen.getByRole('button', { name: 'パスキーでログイン' })
     expect(button.disabled).toBe(true)
     solve('passkey-captcha')
-    fireEvent.click(screen.getByLabelText('ログイン状態を保持する'))
+    expect(screen.queryByLabelText('ログイン状態を保持する')).toBeNull()
     await act(async () => fireEvent.click(button))
     expect(auth.signInWithPasskey).toHaveBeenCalledExactlyOnceWith({ options: { captchaToken: 'passkey-captcha' } })
-    expect(auth.setKeepSignedIn).toHaveBeenCalledWith(false)
+    expect(auth.setKeepSignedIn).toHaveBeenCalledWith(true)
     expect(captcha.reset).toHaveBeenCalledTimes(1)
     expect(view.onClose).toHaveBeenCalled()
     expect(auth.registerPasskey).not.toHaveBeenCalled()
