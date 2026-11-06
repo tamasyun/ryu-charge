@@ -36,9 +36,10 @@ export default function ReviewList({ roomId, onDeleted }) {
     if (!window.confirm('このレビューを削除しますか？')) return
 
     try {
-      await deleteReview(reviewId)
+      const result = await deleteReview(reviewId)
       setRevision(value => value + 1)
       onDeleted?.() // 親コンポーネントに削除を通知してボタンを復活させる
+      if (result?.imageCleanupPending) alert('レビューを削除しました。写真ファイルの回収は確認待ちです。')
     } catch (error) {
       alert('削除に失敗しました: ' + (error?.message || 'エラー'))
     }

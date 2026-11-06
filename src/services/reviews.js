@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { fetchAuthorNames } from './profiles'
 import { createPhotoUploader } from './photoUpload.js'
+import { createReviewDeleter } from './reviewDeletion.js'
 
 const uploadPhotos = createPhotoUploader(supabase)
 
@@ -79,11 +80,4 @@ export async function checkUserHasReviewed(roomId) {
   return Boolean(data) // 既にレビューがあれば true、なければ false
 }
 
-export async function deleteReview(reviewId) {
-  const { error } = await supabase
-    .from('room_reviews')
-    .delete()
-    .eq('id', reviewId)
-
-  if (error) throw error
-}
+export const deleteReview = createReviewDeleter(supabase)
