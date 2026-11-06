@@ -1,3 +1,4 @@
+import PhotoViewer from '../photos/PhotoViewer'
 import { IMAGE_ACCEPT } from '../../utils/imageProcessor.js'
 import { authorLabel } from '../../utils/nickname'
 
@@ -65,21 +66,13 @@ export default function BuildingRooms({
               {photos.length > 0 && (
                 <div className="room-photo-list">
                   {photos.map(photo => (
-                    <a
-                      className="room-photo-item"
-                      href={photo.image_url}
-                      target="_blank"
-                      rel="noreferrer"
+                    <PhotoViewer
                       key={photo.id}
-                      aria-label={`${room.name}の写真を拡大表示`}
-                    >
-                      <img
-                        className="room-photo"
-                        src={photo.image_url}
-                        alt={`${room.name}のコンセント・教室の写真`}
-                        loading="lazy"
-                      />
-                    </a>
+                      src={photo.image_url}
+                      alt={`${room.name}のコンセント・教室の写真`}
+                      className="room-photo-item"
+                      imageClassName="room-photo"
+                    />
                   ))}
                 </div>
               )}

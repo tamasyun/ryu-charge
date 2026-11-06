@@ -1,3 +1,4 @@
+import PhotoViewer from '../photos/PhotoViewer'
 import { useEffect, useState } from 'react'
 import { fetchReviews, deleteReview } from '../../services/reviews'
 import { supabase } from '../../lib/supabase'
@@ -91,20 +92,12 @@ export default function ReviewList({ roomId, onDeleted }) {
           {/* 写真があれば表示 */}
           {review.image_url && (
             <div style={{ marginTop: '8px' }}>
-              <a href={review.image_url} target="_blank" rel="noopener noreferrer">
-                <img
-                  src={review.image_url}
-                  alt="レビュー写真"
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '180px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                    objectFit: 'cover',
-                    display: 'block'
-                  }}
-                />
-              </a>
+              <PhotoViewer
+                src={review.image_url}
+                alt="レビュー写真"
+                className="review-photo-trigger"
+                imageClassName="review-photo-thumbnail"
+              />
             </div>
           )}
         </article>

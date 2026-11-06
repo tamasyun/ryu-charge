@@ -73,3 +73,18 @@
 .review-item time { color: var(--text); font-size: 12px; }
 .review-item p { margin: 8px 0 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .review-summary { color: var(--text-h); font-size: 14px; }
+
+.review-photo-trigger {
+  max-width: 100%;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.review-photo-thumbnail {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  object-fit: cover;
+}

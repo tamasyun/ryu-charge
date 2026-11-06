@@ -4,7 +4,7 @@ import { createServer } from 'vite'
 import { chromium } from '@playwright/test'
 let server, browser, baseURL
 before(async () => {
-  server = await createServer({ cacheDir: 'node_modules/.vite-forms-tests', optimizeDeps: { noDiscovery: true, include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'] }, server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' })
+  server = await createServer({ cacheDir: 'node_modules/.vite-forms-tests', optimizeDeps: { noDiscovery: true, include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@base-ui/react/dialog'] }, server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' })
   await server.listen()
   baseURL = `http://127.0.0.1:${server.httpServer.address().port}`
   browser = await chromium.launch()
