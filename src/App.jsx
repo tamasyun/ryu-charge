@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase'
 import { createRoom, createOutlet, fetchBuildings } from './services/buildings'
+import { fetchRoomPhotos, uploadRoomPhotos } from './services/RoomPhotos.js'
 import { isUniversityEmail } from './utils/universityEmail'
 import { readRedirectIntent, clearRedirectIntent } from './utils/authRedirect'
 import { useMediaQuery } from './hooks/useMediaQuery'
@@ -42,6 +43,8 @@ function App() {
   const [loginIntent, setLoginIntent] = useState(null)
   const [redirectIntent, setRedirectIntent] = useState(readRedirectIntent)
   const [reviewOverviewVersion, setReviewOverviewVersion] = useState(0)
+  const [roomPhotos, setRoomPhotos] = useState({})
+  const [uploadingRoomId, setUploadingRoomId] = useState(null)
 
   const { profile, status: profileStatus, reloadProfile } = useAccount(user)
   const hasUniversityEmail = isUniversityEmail(user?.email)
@@ -120,6 +123,29 @@ function App() {
     initialize()
     return () => { active = false }
   }, [])
+
+  // 選択中の建物に属する教室の写真URLを取得する。
+  const selectedRoomIdsKey = selectedBuilding?.rooms.map(room => room.id).join('|') ?? ''
+  useEffect(() => {
+    if (!selectedBuildingId || !selectedRoomIdsKey) {
+      setRoomPhotos({})
+      return
+    }
+
+    let active = true
+    const roomIds = selectedRoomIdsKey.split('|')
+    fetchRoomPhotos(roomIds)
+      .then(photosByRoom => {
+        if (active) setRoomPhotos(photosByRoom)
+      })
+      .catch(error => {
+        if (active) {
+          setErrorMessage(error instanceof Error ? error.message : '教室の写真を取得できませんでした。')
+        }
+      })
+
+    return () => { active = false }
+  }, [selectedBuildingId, selectedRoomIdsKey])
 
   // 別タブで開く認証リンクでも、URLから操作を再開する。
   useEffect(() => {
@@ -237,6 +263,32 @@ function App() {
     }
   }
 
+  async function handleAddRoomPhotos(roomId, files) {
+    if (!canPost) {
+      setErrorMessage('写真を追加するには琉球大学の大学メールでログインしてください。')
+      return
+    }
+    if (!selectedBuilding?.rooms.some(room => room.id === roomId)) {
+      setErrorMessage('教室を確認できませんでした。画面を再読み込みしてください。')
+      return
+    }
+    if (uploadingRoomId) return
+
+    setUploadingRoomId(roomId)
+    setErrorMessage('')
+    try {
+      const uploadedPhotos = await uploadRoomPhotos(roomId, files)
+      setRoomPhotos(current => ({
+        ...current,
+        [roomId]: [...(current[roomId] ?? []), ...uploadedPhotos],
+      }))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '写真を追加できませんでした。')
+    } finally {
+      setUploadingRoomId(null)
+    }
+  }
+
   function renderDetailBody() {
     return (
       <>
@@ -281,6 +333,10 @@ function App() {
           <BuildingRooms
             building={selectedBuilding}
             reviewOverview={reviewOverview}
+            roomPhotos={roomPhotos}
+            canPost={canPost}
+            uploadingRoomId={uploadingRoomId}
+            onAddPhotos={handleAddRoomPhotos}
             onShowReviews={roomId => {
               setSelectedRoomId(roomId)
               setIsFormOpen(false)

@@ -10,45 +10,99 @@ function reviewOverviewLabel(overview, buildingId, roomId) {
   return `★ ${(summary.ratingTotal / summary.count).toFixed(1)} ／ 5 ・ ${summary.count}件`
 }
 
-export default function BuildingRooms({ building, reviewOverview, onShowReviews }) {
+export default function BuildingRooms({
+  building,
+  reviewOverview,
+  roomPhotos = {},
+  canPost,
+  uploadingRoomId,
+  onAddPhotos,
+  onShowReviews,
+}) {
   return (
     <>
       {building.rooms.length === 0 && <p>教室はまだ登録されていません。</p>}
-      {building.rooms.map(room => (
-        <section key={room.id} className="room-detail">
-          <h3>
-            {room.name}
-            {room.floor != null ? `（${room.floor}階）` : ''}
-            <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
-          </h3>
-          <p>{room.location_detail}</p>
+      {building.rooms.map(room => {
+        const photos = roomPhotos[room.id] ?? []
+        const isUploading = uploadingRoomId === room.id
 
-          {room.outlets.length === 0 ? (
-            <p>コンセントは未登録です。</p>
-          ) : (
-            <ul>
-              {room.outlets.map(outlet => (
-                <li key={outlet.id}>
-                  <strong>{outlet.location_detail}</strong>
-                  <div>
-                    <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
-                    <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <button type="button" className="review-list-link" onClick={() => onShowReviews(room.id)}>
-            <span className="review-link-content">
-              <span>レビューを見る</span>
-              <span className="review-link-overview">
-                {reviewOverviewLabel(reviewOverview, building.id, room.id)}
+        return (
+          <section key={room.id} className="room-detail">
+            <h3>
+              {room.name}
+              {room.floor != null ? `（${room.floor}階）` : ''}
+              <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
+            </h3>
+            <p>{room.location_detail}</p>
+
+            <div className="room-photo-section">
+              {canPost && (
+                <label className={`room-photo-add ${isUploading ? 'is-uploading' : ''}`}>
+                  {isUploading ? 'アップロード中...' : '＋ 写真を追加'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    disabled={isUploading}
+                    onChange={event => {
+                      const files = Array.from(event.target.files ?? [])
+                      if (files.length > 0) onAddPhotos(room.id, files)
+                      event.target.value = ''
+                    }}
+                  />
+                </label>
+              )}
+
+              {photos.length > 0 && (
+                <div className="room-photo-list">
+                  {photos.map(photo => (
+                    <a
+                      className="room-photo-item"
+                      href={photo.image_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      key={photo.id}
+                      aria-label={`${room.name}の写真を拡大表示`}
+                    >
+                      <img
+                        className="room-photo"
+                        src={photo.image_url}
+                        alt={`${room.name}のコンセント・教室の写真`}
+                        loading="lazy"
+                      />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {room.outlets.length === 0 ? (
+              <p>コンセントは未登録です。</p>
+            ) : (
+              <ul>
+                {room.outlets.map(outlet => (
+                  <li key={outlet.id}>
+                    <strong>{outlet.location_detail}</strong>
+                    <div>
+                      <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
+                      <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button type="button" className="review-list-link" onClick={() => onShowReviews(room.id)}>
+              <span className="review-link-content">
+                <span>レビューを見る</span>
+                <span className="review-link-overview">
+                  {reviewOverviewLabel(reviewOverview, building.id, room.id)}
+                </span>
               </span>
-            </span>
-            <span aria-hidden="true">→</span>
-          </button>
-        </section>
-      ))}
+              <span aria-hidden="true">→</span>
+            </button>
+          </section>
+        )
+      })}
     </>
   )
 }

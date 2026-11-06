@@ -73,4 +73,98 @@ BEGIN
 END;
 $$;
 
+
+-- 写真情報を管理するテーブル
+CREATE TABLE public.room_photos (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id text NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+  storage_path text NOT NULL UNIQUE,
+  user_id uuid NOT NULL DEFAULT auth.uid()
+    REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX room_photos_room_id_idx
+  ON public.room_photos(room_id);
+
+ALTER TABLE public.room_photos ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON public.room_photos TO anon, authenticated;
+GRANT INSERT (room_id, storage_path) ON public.room_photos TO authenticated;
+
+-- 誰でも写真情報を閲覧できる
+CREATE POLICY room_photos_public_read
+ON public.room_photos
+FOR SELECT TO anon, authenticated
+USING (true);
+
+-- 大学メール認証済みかつプロフィール登録済みのユーザーのみ投稿可能
+CREATE POLICY room_photos_university_insert
+ON public.room_photos
+FOR INSERT TO authenticated
+WITH CHECK (
+  user_id = (SELECT auth.uid())
+  AND EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = (SELECT auth.uid())
+  )
+  AND EXISTS (
+    SELECT 1 FROM public.rooms
+    WHERE id = room_id
+  )
+  AND lower(coalesce((SELECT auth.jwt()) ->> 'email', '')) ~
+    '^[^@[:space:]]+@([a-z0-9-]+[.])*u-ryukyu[.]ac[.]jp$'
+);
+
+-- Storageバケット作成（公開閲覧）
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'room-photos',
+  'room-photos',
+  true,
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = true,
+  file_size_limit = 5242880,
+  allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp'];
+
+-- Storageへのアップロード制限
+CREATE POLICY room_photos_storage_insert
+ON storage.objects
+FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'room-photos'
+  AND EXISTS (
+    SELECT 1 FROM public.rooms
+    WHERE id = (storage.foldername(name))[1]
+  )
+  AND EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = (SELECT auth.uid())
+  )
+  AND lower(coalesce((SELECT auth.jwt()) ->> 'email', '')) ~
+    '^[^@[:space:]]+@([a-z0-9-]+[.])*u-ryukyu[.]ac[.]jp$'
+);
+
+
+CREATE POLICY room_photos_university_insert_guard
+ON public.room_photos AS RESTRICTIVE
+FOR INSERT TO authenticated
+WITH CHECK (
+  user_id = (SELECT auth.uid())
+  AND EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = (SELECT auth.uid())
+  )
+  AND EXISTS (
+    SELECT 1 FROM public.rooms
+    WHERE id = room_id
+  )
+  AND lower(coalesce((SELECT auth.jwt()) ->> 'email', '')) ~
+    '^[^@[:space:]]+@([a-z0-9-]+[.])*u-ryukyu[.]ac[.]jp$'
+);
+
+
 COMMIT;
