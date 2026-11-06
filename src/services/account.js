@@ -27,7 +27,7 @@ export function createAccountService(client) {
   }
 
   return {
-    async sendCode({ email, mode, nickname }) {
+    async sendCode({ email, mode, nickname, captchaToken }) {
       if (mode !== 'login' && mode !== 'signup') throw new Error('認証方法を確認してください。')
       const normalizedEmail = email.trim().toLowerCase()
       if (!isUniversityEmail(normalizedEmail)) {
@@ -38,6 +38,7 @@ export function createAccountService(client) {
       }
       const options = { shouldCreateUser: mode === 'signup' }
       if (mode === 'signup') options.data = { nickname: normalizeNickname(nickname) }
+      if (captchaToken) options.captchaToken = captchaToken
       const { error } = await client.auth.signInWithOtp({ email: normalizedEmail, options })
       if (error) throw error
       return normalizedEmail

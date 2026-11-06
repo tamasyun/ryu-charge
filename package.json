@@ -7,11 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs && npm run test:ui",
+    "test:ui": "vitest run tests/LoginDialog.test.jsx",
     "preview": "vite preview"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@marsidev/react-turnstile": "^1.6.3",
     "@supabase/supabase-js": "^2.117.3",
     "leaflet": "^1.9.4",
     "react": "^19.2.8",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
@@ -27,6 +30,8 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
-    "vite": "^8.3.0"
+    "jsdom": "^29.1.1",
+    "vite": "^8.3.0",
+    "vitest": "^4.1.12"
   }
 }

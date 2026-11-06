@@ -44,6 +44,22 @@
   cursor: not-allowed;
 }
 
+.login-captcha {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.login-captcha p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.login-captcha button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .login-destination {
   overflow-wrap: anywhere;
 }

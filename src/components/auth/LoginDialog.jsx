@@ -1,5 +1,6 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
+import { Turnstile } from '@marsidev/react-turnstile'
 import { setKeepSignedIn, supabase } from '../../lib/supabase'
 import { isUniversityEmail } from '../../utils/universityEmail'
 import { createAccountService } from '../../services/account'
@@ -10,6 +11,7 @@ import './LoginDialogOtp.css'
 
 const REMEMBERED_EMAIL_KEY = 'ryu-charge:remembered-email'
 const account = createAccountService(supabase)
+const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? ''
 
 function readRememberedEmail() {
   try {
@@ -33,6 +35,11 @@ function storeRememberedEmail(email, shouldRemember) {
 }
 
 function authErrorMessage(error, action, mode) {
+  if (error?.code === 'captcha_failed') {
+    return turnstileSiteKey
+      ? 'セキュリティ確認に失敗しました。もう一度確認を完了してから送信してください。繰り返し失敗する場合は管理者にお問い合わせください。'
+      : 'セキュリティ確認の設定に問題があります。管理者にお問い合わせください。'
+  }
   if (error?.status === 429) {
     return '短時間に多くのリクエストがありました。しばらく待ってからお試しください。'
   }
@@ -61,6 +68,31 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
   const [errorMessage, setErrorMessage] = useState('')
   const [notice, setNotice] = useState('')
   const [resendWait, setResendWait] = useState(0)
+  const captchaRef = useRef(null)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const [captchaError, setCaptchaError] = useState('')
+  const [captchaLoadFailed, setCaptchaLoadFailed] = useState(false)
+  const captchaPending = Boolean(turnstileSiteKey) && !captchaToken
+
+  function resetCaptcha() {
+    setCaptchaToken('')
+    captchaRef.current?.reset()
+  }
+
+  function canSendWithCaptcha() {
+    if (!turnstileSiteKey) return true
+    if (!captchaToken || captchaRef.current?.isExpired()) {
+      setCaptchaError('セキュリティ確認を完了してから送信してください。')
+      resetCaptcha()
+      return false
+    }
+    return true
+  }
+
+  function handleCaptchaError() {
+    setCaptchaToken('')
+    setCaptchaError('セキュリティ確認を読み込めないか、確認に失敗しました。通信環境を確認し、確認をやり直してください。')
+  }
 
   useEffect(() => {
     if (resendWait <= 0) return undefined
@@ -87,11 +119,15 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
       setErrorMessage('ニックネームを1〜20文字で入力してください。')
       return
     }
+    if (!canSendWithCaptcha()) return
 
     setBusy(true)
+    // トークンは1回限り。再送信に使うリクエストには保存しない。
+    const token = captchaToken
+    setCaptchaToken('')
     try {
       const request = { email: normalizedEmail, mode, nickname }
-      await account.sendCode(request)
+      await account.sendCode({ ...request, captchaToken: token })
       storeRememberedEmail(normalizedEmail, rememberEmail)
       setEmail(normalizedEmail)
       setSentRequest(request)
@@ -101,6 +137,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
     } catch (error) {
       setErrorMessage(authErrorMessage(error, 'send', mode))
     } finally {
+      resetCaptcha()
       setBusy(false)
     }
   }
@@ -130,20 +167,63 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
 
   async function handleResend() {
     if (busy || resendWait > 0) return
+    if (!canSendWithCaptcha()) return
     setBusy(true)
+    const token = captchaToken
+    setCaptchaToken('')
     setErrorMessage('')
     setNotice('')
     try {
-      await account.sendCode(sentRequest)
+      await account.sendCode({ ...sentRequest, captchaToken: token })
       setCode('')
       setResendWait(60)
       setNotice('認証コードを再送信しました。')
     } catch (error) {
       setErrorMessage(authErrorMessage(error, 'send', sentRequest.mode))
     } finally {
+      resetCaptcha()
       setBusy(false)
     }
   }
+
+  const captcha = turnstileSiteKey && (
+    <div className="login-captcha">
+      <Turnstile
+        ref={captchaRef}
+        siteKey={turnstileSiteKey}
+        options={{ language: 'ja', size: 'compact', responseField: false, refreshExpired: 'auto', refreshTimeout: 'auto' }}
+        onSuccess={token => {
+          setCaptchaToken(token)
+          setCaptchaError('')
+          setCaptchaLoadFailed(false)
+        }}
+        onExpire={() => {
+          setCaptchaToken('')
+          setCaptchaError('セキュリティ確認の有効期限が切れました。もう一度確認してください。')
+        }}
+        onError={handleCaptchaError}
+        onTimeout={handleCaptchaError}
+        onUnsupported={handleCaptchaError}
+        scriptOptions={{ onError: () => {
+          setCaptchaToken('')
+          setCaptchaLoadFailed(true)
+          setCaptchaError('セキュリティ確認を読み込めませんでした。通信環境を確認してページを再読み込みしてください。')
+        } }}
+      />
+      {captchaError && <p className="login-error" role="alert">{captchaError}</p>}
+      {captchaPending && !captchaError && (
+        <p role="status">認証コードの送信・再送信にはセキュリティ確認が必要です。</p>
+      )}
+      {!captchaLoadFailed && <button
+        type="button"
+        className="login-secondary"
+        disabled={busy}
+        onClick={() => { setCaptchaError(''); resetCaptcha() }}
+      >
+        セキュリティ確認をやり直す
+      </button>}
+    </div>
+  )
 
   return (
     <Dialog.Popup
@@ -211,7 +291,8 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
               />
               <span>メールアドレスを記憶する</span>
             </label>
-            <button type="submit" className="login-submit" disabled={busy || resendWait > 0}>
+            {captcha}
+            <button type="submit" className="login-submit" disabled={busy || resendWait > 0 || captchaPending}>
               {busy ? '送信中...' : resendWait > 0 ? `送信まで ${resendWait}秒` : '認証コードを送信'}
             </button>
           </form>
@@ -259,10 +340,11 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
               {busy ? '確認中...' : sentRequest.mode === 'signup' ? '認証して登録' : 'ログイン'}
             </button>
             <div className="login-code-actions">
+              {captcha}
               <button
                 className="login-secondary"
                 type="button"
-                disabled={busy || resendWait > 0}
+                disabled={busy || resendWait > 0 || captchaPending}
                 onClick={handleResend}
               >
                 {resendWait > 0
