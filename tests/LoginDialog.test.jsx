@@ -122,6 +122,7 @@ describe('Turnstile-protected email OTP', () => {
     })
     expect(captcha.reset).toHaveBeenCalled()
     expect(screen.getByLabelText('認証コード')).toBeTruthy()
+    expect(screen.queryByTestId('turnstile')).toBeNull()
   })
 
   it.each(['onExpire', 'onError', 'onTimeout', 'onUnsupported'])('%s invalidates the token and allows a fresh challenge', async callback => {
@@ -187,14 +188,20 @@ describe('Turnstile-protected email OTP', () => {
     expect(screen.getByRole('button', { name: '再送信まで 60秒' }).disabled).toBe(true)
     await finishCooldown()
     const resend = screen.getByRole('button', { name: '認証コードを再送信' })
-    expect(resend.disabled).toBe(true)
-    solve('second-token')
     expect(resend.disabled).toBe(false)
-    auth.signInWithOtp.mockResolvedValueOnce({ error: { code: 'captcha_failed' } })
+    expect(screen.queryByTestId('turnstile')).toBeNull()
     await act(async () => fireEvent.click(resend))
+    expect(auth.signInWithOtp).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('turnstile')).toBeTruthy()
+    expect(resend.disabled).toBe(true)
+    auth.signInWithOtp.mockResolvedValueOnce({ error: { code: 'captcha_failed' } })
+    await act(async () => captcha.props.onSuccess('second-token'))
     expect(resend.disabled).toBe(true)
     expect(screen.getByRole('alert').textContent).toContain('セキュリティ確認に失敗')
     solve('third-token')
+    // 自動更新ではAPIを再試行せず、失敗後は再度ボタンを押すまで待つ。
+    expect(auth.signInWithOtp).toHaveBeenCalledTimes(2)
+    expect(resend.disabled).toBe(false)
     await act(async () => fireEvent.click(resend))
     const requests = auth.signInWithOtp.mock.calls.map(([request]) => request)
     expect(requests.map(request => request.options.captchaToken)).toEqual(['first-token', 'second-token', 'third-token'])
@@ -203,14 +210,34 @@ describe('Turnstile-protected email OTP', () => {
       if (mode === 'signup') expect(request.options.data).toEqual({ nickname: 'りゅう' })
     }
     expect(screen.getByRole('button', { name: '再送信まで 60秒' }).disabled).toBe(true)
+    expect(screen.queryByTestId('turnstile')).toBeNull()
     expect(screen.getByText('認証コードを再送信しました。')).toBeTruthy()
+  })
+
+  it('does not resend if a pending CAPTCHA completes during OTP verification', async () => {
+    openDialog()
+    solve()
+    vi.useFakeTimers()
+    await send()
+    await finishCooldown()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '認証コードを再送信' })))
+    const lateSuccess = captcha.props.onSuccess
+    let finishVerification
+    auth.verifyOtp.mockImplementationOnce(() => new Promise(resolve => { finishVerification = resolve }))
+    fireEvent.change(screen.getByLabelText('認証コード'), { target: { value: '12345678' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'ログイン', exact: true })))
+    expect(screen.queryByTestId('turnstile')).toBeNull()
+    await act(async () => lateSuccess('late-token'))
+    expect(auth.signInWithOtp).toHaveBeenCalledTimes(1)
+    expect(auth.verifyOtp).toHaveBeenCalledTimes(1)
+    await act(async () => finishVerification({ error: null }))
   })
 
   it.each([true, false])('verifies exactly eight digits without CAPTCHA and preserves keepSignedIn=%s', async keepSignedIn => {
     const { onClose } = openDialog()
     solve()
     await send()
-    act(() => captcha.props.onError())
+    expect(screen.queryByTestId('turnstile')).toBeNull()
     const code = screen.getByLabelText('認証コード')
     fireEvent.change(code, { target: { value: '123456' } })
     const login = screen.getByRole('button', { name: 'ログイン' })

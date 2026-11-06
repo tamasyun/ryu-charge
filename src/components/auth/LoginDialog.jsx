@@ -72,6 +72,9 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   const [resendWait, setResendWait] = useState(0)
   const captchaRef = useRef(null)
   const [captchaToken, setCaptchaToken] = useState('')
+  const [resendChallengeOpen, setResendChallengeOpen] = useState(false)
+  const resendRequestedRef = useRef(false)
+  const resendSendingRef = useRef(false)
   const captchaPending = Boolean(turnstileSiteKey) && !captchaToken
 
   function resetCaptcha() {
@@ -145,6 +148,10 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
       return
     }
 
+    // コード照合中に遅れてCAPTCHAが完了しても、再送信でコードを入れ替えない。
+    resendRequestedRef.current = false
+    setResendChallengeOpen(false)
+    setCaptchaToken('')
     setBusy(true)
     setErrorMessage('')
     setNotice('')
@@ -189,15 +196,38 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
 
   async function handleResend() {
     if (busy || resendWait > 0) return
-    if (!canSendWithCaptcha()) return
+    setErrorMessage('')
+    setNotice('')
+    if (turnstileSiteKey && (!resendChallengeOpen || !captchaToken || captchaRef.current?.isExpired())) {
+      // 再送信を選んだときだけ表示し、確認が済んだら一度だけ送信する。
+      resendRequestedRef.current = true
+      setCaptchaToken('')
+      setResendChallengeOpen(true)
+      if (resendChallengeOpen) captchaRef.current?.reset()
+      return
+    }
+    await resendCode(captchaToken)
+  }
+
+  function receiveResendToken(token) {
+    setCaptchaToken(token)
+    if (token && resendRequestedRef.current) {
+      resendRequestedRef.current = false
+      void resendCode(token)
+    }
+  }
+
+  async function resendCode(token) {
+    if (resendSendingRef.current) return
+    resendSendingRef.current = true
     setBusy(true)
-    const token = captchaToken
     setCaptchaToken('')
     setErrorMessage('')
     setNotice('')
     try {
       await account.sendCode({ ...sentRequest, captchaToken: token })
       setCode('')
+      setResendChallengeOpen(false)
       setResendWait(60)
       setNotice('認証コードを再送信しました。')
     } catch (error) {
@@ -205,6 +235,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
     } finally {
       resetCaptcha()
       setBusy(false)
+      resendSendingRef.current = false
     }
   }
 
@@ -333,11 +364,12 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
               {busy ? '確認中...' : sentRequest.mode === 'signup' ? '認証して登録' : 'ログイン'}
             </button>
             <div className="login-code-actions">
-              {captcha}
+              {turnstileSiteKey && resendChallengeOpen && <SecurityChallenge siteKey={turnstileSiteKey}
+                widgetRef={captchaRef} onTokenChange={receiveResendToken} />}
               <button
                 className="login-secondary"
                 type="button"
-                disabled={busy || resendWait > 0 || captchaPending}
+                disabled={busy || resendWait > 0 || (resendChallengeOpen && captchaPending)}
                 onClick={handleResend}
               >
                 {resendWait > 0
