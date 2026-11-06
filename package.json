@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "node --test tests/*.test.mjs",
+    "audit:photos": "node scripts/audit-photo-storage.mjs",
     "check:migrations": "node scripts/check-migration-history.mjs",
     "preview": "vite preview"
   },
