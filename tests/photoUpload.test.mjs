@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPhotoUploader } from '../src/services/photoUpload.js'
 
-function fixture({ conversionError, uploadAt = -1, databaseError, cleanupError, cleanupEmpty = false, afterCommit = false } = {}) {
+function fixture({ conversionError, uploadAt = -1, databaseError, cleanupError, cleanupEmpty = false, afterCommit = false, incomplete = false, absenceError } = {}) {
   const files = Array.from({ length: 5 }, () => new File(['encoded'], 'photo.webp', { type: 'image/webp' }))
   const uploaded = [], removed = [], batches = [], recovery = [], progress = []
   let count = 0
@@ -24,9 +24,10 @@ function fixture({ conversionError, uploadAt = -1, databaseError, cleanupError, 
       assert.equal(table, 'room_photos')
       return { insert(records) {
         batches.push(records)
-        return { async select() {
+        return { async select(columns) {
+          assert.equal(columns, 'id,room_id,storage_path,image_url,user_id,created_at')
           if (afterCommit) throw new Error('connection lost after commit')
-          return { data: [...records].reverse().map((record, id) => ({ ...record, id })), error: databaseError }
+          return { data: (incomplete ? records.slice(1) : [...records].reverse()).map((record, id) => ({ ...record, id })), error: databaseError }
         } }
       } }
     },
@@ -34,6 +35,7 @@ function fixture({ conversionError, uploadAt = -1, databaseError, cleanupError, 
   const upload = createPhotoUploader(client, {
     prepare: async input => { assert.equal(input, files); if (conversionError) throw conversionError; return files },
     recordRecovery: entry => recovery.push(entry), track: () => {},
+    verifyAbsent: async url => { assert.ok(uploaded.some(path => url.endsWith(path))); if (absenceError) throw absenceError },
   })
   return { uploaded, removed, batches, recovery, progress,
     run: () => upload({ bucket: 'room-photos', folder: 'room-1', files, table: 'room_photos',
@@ -77,7 +79,13 @@ test('DB response lost after commit never deletes potentially referenced images'
   assert.equal(f.removed.length, 0)
   assert.equal(f.recovery[0].reason, 'database-result-unknown')
 })
-for (const failure of [{ cleanupError: new Error('RLS') }, { cleanupEmpty: true }]) {
+test('incomplete successful DB response is preserved for reconciliation, not silently accepted or deleted', async () => {
+  const f = fixture({ incomplete: true })
+  await assert.rejects(f.run(), /保存結果/)
+  assert.equal(f.removed.length, 0)
+  assert.equal(f.recovery[0].reason, 'database-result-unknown')
+})
+for (const failure of [{ cleanupError: new Error('RLS') }, { cleanupEmpty: true }, { absenceError: new Error('still exists') }]) {
   test(`cleanup ${failure.cleanupEmpty ? 'empty response' : 'failure'} is reported and journaled`, async () => {
     const f = fixture({ databaseError: { code: '23505' }, ...failure })
     await assert.rejects(f.run(), /回収/)
@@ -99,10 +107,14 @@ test('review image remains in review-images/reviews and is recovered on SQL reje
     } },
     from(table) { assert.equal(table, 'room_reviews'); return { insert(records) {
       assert.equal(records.length, 1); record = records[0]
-      return { async select() { return { error: { code: '23505', message: 'review exists' } } } }
+      return { async select(columns) {
+        assert.equal(columns, 'id,room_id,rating,comment,image_url,user_id,created_at')
+        assert.ok(!columns.includes('delete_key_hash'))
+        return { error: { code: '23505', message: 'review exists' } }
+      } }
     } } },
   }
-  const upload = createPhotoUploader(client, { prepare: async () => files, track: () => {} })
+  const upload = createPhotoUploader(client, { prepare: async () => files, track: () => {}, verifyAbsent: async () => {} })
   await assert.rejects(upload({ bucket: 'review-images', folder: 'reviews', table: 'room_reviews', files,
     makeRecord: (_path, image_url) => ({ room_id: 'room-1', rating: 4, comment: null, image_url }),
   }))

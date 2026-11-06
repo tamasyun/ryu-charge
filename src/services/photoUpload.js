@@ -1,6 +1,11 @@
 import { extensionForType, processImages } from '../utils/imageProcessor.js'
+import { removePhotoObjects } from './photoRemoval.js'
 
 const RECOVERY_KEY = 'ryu-charge:photo-recovery'
+const RETURN_COLUMNS = {
+  room_reviews: 'id,room_id,rating,comment,image_url,user_id,created_at',
+  room_photos: 'id,room_id,storage_path,image_url,user_id,created_at',
+}
 
 // アップロード前から記録し、タブが閉じられた場合も管理者が回収を追跡できる。
 // 自動削除には使わない（DBの遅延コミット・別端末の利用を考慮）。
@@ -14,7 +19,7 @@ function trackUpload(entry, complete = false) {
   }
 }
 
-function rememberRecovery(entry) {
+export function rememberRecovery(entry) {
   trackUpload(entry)
   console.error('写真の保存状態の確認・回収が必要です:', entry)
 }
@@ -25,8 +30,9 @@ function isDefiniteRejection(error) {
   return /^(22|23|42|44|P0)/.test(error?.code || '') || /^PGRST(1|2)/.test(error?.code || '')
 }
 
-export function createPhotoUploader(client, { prepare = processImages, recordRecovery = rememberRecovery, track = trackUpload } = {}) {
+export function createPhotoUploader(client, { prepare = processImages, recordRecovery = rememberRecovery, track = trackUpload, verifyAbsent } = {}) {
   return async function uploadPhotos({ bucket, folder, files, table, makeRecord, onProgress = () => {} }) {
+    if (!RETURN_COLUMNS[table]) throw new Error('写真の保存先が不正です。')
     // 5枚すべてを変換できるまでStorage/DBを変更しない。
     const converted = await prepare(files, onProgress)
     const paths = []
@@ -56,13 +62,17 @@ export function createPhotoUploader(client, { prepare = processImages, recordRec
       track(journal('saving'))
       savingDatabase = true
       // 複数の写真も1つのINSERTにし、部分的なDB登録を避ける。
-      const { data, error } = await client.from(table).insert(records).select('*')
+      const { data, error } = await client.from(table).insert(records).select(RETURN_COLUMNS[table])
       if (error) throw error
-      track(journal('complete'), true)
       // PostgRESTの返却順には依存せず、選択順にそろえる。
-      return records.map(record => (data ?? []).find(row =>
+      const ordered = records.map(record => (data ?? []).find(row =>
         record.storage_path ? row.storage_path === record.storage_path : row.image_url === record.image_url
-      )).filter(Boolean)
+      ))
+      if (data?.length !== records.length || ordered.some(row => !row) || new Set(ordered).size !== records.length) {
+        throw new Error('写真の保存結果が不完全です。')
+      }
+      track(journal('complete'), true)
+      return ordered
     } catch (error) {
       if (savingDatabase && !isDefiniteRejection(error)) {
         recordRecovery(journal('database-result-unknown'))
@@ -70,10 +80,7 @@ export function createPhotoUploader(client, { prepare = processImages, recordRec
       }
       if (paths.length) {
         try {
-          const { data, error: cleanupError } = await client.storage.from(bucket).remove(paths)
-          // RLSで対象が見えないと、エラーなし・0件で終了する場合もある。
-          const removed = new Set((data ?? []).map(item => item.name))
-          if (cleanupError || paths.some(path => !removed.has(path))) throw cleanupError || new Error('削除結果を確認できませんでした。')
+          await removePhotoObjects(client, bucket, paths, { verifyAbsent })
         } catch (cleanupError) {
           recordRecovery(journal('cleanup-failed'))
           throw new Error('投稿に失敗し、写真ファイルの回収も確認できませんでした。管理者にお問い合わせください。', { cause: cleanupError })
