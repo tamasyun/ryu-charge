@@ -39,42 +39,44 @@ export default function BuildingRooms({
             <p>{room.location_detail}</p>
 
             <div className="room-photo-section">
-              {canPost && (
-                <label className={`room-photo-add ${isUploading ? 'is-uploading' : ''}`}>
-                  {isUploading ? '写真を処理中...' : '＋ 写真を追加'}
-                  <input
-                    type="file"
-                    accept={IMAGE_ACCEPT}
-                    multiple
-                    disabled={uploadingRoomId != null}
-                    onChange={event => {
-                      const files = Array.from(event.target.files ?? [])
-                      if (files.length > 0) onAddPhotos(room.id, files)
-                      event.target.value = ''
-                    }}
+              <div className="room-photo-list" role="group" aria-label={`${room.name}の写真`} data-base-ui-swipe-ignore>
+                {photos.map(photo => (
+                  <PhotoViewer
+                    key={photo.id}
+                    src={photo.image_url}
+                    alt={`${room.name}のコンセント・教室の写真`}
+                    className="room-photo-item"
+                    imageClassName="room-photo"
                   />
-                </label>
-              )}
-
-              {canPost && <small>1回5枚まで。写真は自動で変換・圧縮します（変換後1枚5MBまで）。</small>}
+                ))}
+                {canPost && (
+                  <label className={`room-photo-add ${uploadingRoomId != null ? 'is-disabled' : ''}`}>
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                      <path d="M14 5h-3l-2 3H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="12" cy="13" r="3" />
+                      <path d="M19 2v6m-3-3h6" strokeLinecap="round" />
+                    </svg>
+                    <span>{isUploading ? '追加中...' : '写真を追加'}</span>
+                    <input
+                      type="file"
+                      aria-label={`${room.name}に写真を追加`}
+                      accept={IMAGE_ACCEPT}
+                      multiple
+                      disabled={uploadingRoomId != null}
+                      onChange={event => {
+                        const files = Array.from(event.target.files ?? [])
+                        if (files.length > 0) onAddPhotos(room.id, files)
+                        event.target.value = ''
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
               {isUploading && photoProgress && (
                 <p role="status">
                   {photoProgress.phase === 'processing' ? '写真を変換中' : photoProgress.phase === 'saving' ? '写真を保存中' : 'アップロード中'}
                   ... {photoProgress.current} / {photoProgress.total}枚
                 </p>
-              )}
-              {photos.length > 0 && (
-                <div className="room-photo-list">
-                  {photos.map(photo => (
-                    <PhotoViewer
-                      key={photo.id}
-                      src={photo.image_url}
-                      alt={`${room.name}のコンセント・教室の写真`}
-                      className="room-photo-item"
-                      imageClassName="room-photo"
-                    />
-                  ))}
-                </div>
               )}
             </div>
 

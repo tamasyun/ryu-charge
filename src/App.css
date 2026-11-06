@@ -459,46 +459,70 @@
 }
 
 .room-photo-add {
-  display: inline-flex;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 88px;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  align-self: flex-start;
-  min-height: 36px;
-  padding: 7px 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #334155;
-  background: #fff;
-  font-size: 13px;
+  gap: 8px;
+  height: 126px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-h);
+  background: var(--bg);
+  font-size: 12px;
   cursor: pointer;
 }
 
-.room-photo-add:hover {
-  background: #f8fafc;
+.room-photo-add:not(.is-disabled):hover {
+  background: var(--social-bg);
 }
 
-.room-photo-add.is-uploading {
+.room-photo-add:focus-within {
+  outline: 3px solid #2563eb;
+  outline-offset: -3px;
+}
+
+.room-photo-add.is-disabled {
   opacity: 0.6;
   cursor: wait;
 }
 
 .room-photo-add input {
-  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: inherit;
 }
 
 .room-photo-list {
   display: flex;
-  flex-wrap: wrap;
+  min-width: 0;
   gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  border-radius: 12px;
 }
 
 .room-photo-item {
   display: block;
-  width: 104px;
-  height: 84px;
+  flex: 0 0 168px;
+  height: 126px;
   overflow: hidden;
-  border-radius: 8px;
-  background: #f1f5f9;
+  border-radius: 12px;
+  background: var(--social-bg);
+  scroll-snap-align: start;
+}
+
+.room-photo-item:focus-visible {
+  outline-offset: -3px;
 }
 
 .room-photo {

@@ -132,7 +132,6 @@ export default function ReviewForm({ roomId, canPost, onSubmitted }) {
         disabled={saving}
         onChange={handleImageChange}
       />
-      <small>JPEG・PNG・WebP・HEIC・HEIF対応。写真は自動で変換・圧縮します（変換後5MBまで）。</small>
       {processing && <p role="status">写真を変換中...</p>}
       {(previewUrl || processing || imageError) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
