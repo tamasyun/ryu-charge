@@ -17,11 +17,11 @@ export async function fetchRoomPhotos(roomIds) {
   if (error) throw error
 
   return orderPhotoBatches(data ?? []).reduce((result, photo) => {
-    // image_url未設定の既存レコードはstorage_pathからURLを補完する。
-    const imageUrl = photo.image_url || (
+    // 常にstorage_pathと同じオブジェクトの公開URLを使用する。
+    const imageUrl = (
       photo.storage_path
         ? supabase.storage.from(ROOM_PHOTO_BUCKET).getPublicUrl(photo.storage_path).data.publicUrl
-        : null
+        : photo.image_url
     )
     if (!imageUrl) return result
 
