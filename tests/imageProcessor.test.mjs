@@ -6,7 +6,7 @@ import { chromium, webkit } from '@playwright/test'
 
 let server, baseURL
 before(async () => {
-  server = await createServer({ cacheDir: 'node_modules/.vite-image-tests', optimizeDeps: { noDiscovery: true, include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'] }, server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' })
+  server = await createServer({ cacheDir: 'node_modules/.vite-image-tests', optimizeDeps: { noDiscovery: true, include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'] }, server: { host: '127.0.0.1', port: 0, watch: null }, logLevel: 'error' })
   await server.listen()
   baseURL = `http://127.0.0.1:${server.httpServer.address().port}`
 })
