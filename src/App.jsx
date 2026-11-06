@@ -45,6 +45,9 @@ function App() {
   const [reviewOverviewVersion, setReviewOverviewVersion] = useState(0)
   const [roomPhotos, setRoomPhotos] = useState({})
   const [uploadingRoomId, setUploadingRoomId] = useState(null)
+  const [photoProgress, setPhotoProgress] = useState(null)
+  const [roomPhotosVersion, setRoomPhotosVersion] = useState(0)
+  const photoUploadLock = useRef(false)
 
   const { profile, status: profileStatus, reloadProfile } = useAccount(user)
   const hasUniversityEmail = isUniversityEmail(user?.email)
@@ -127,13 +130,8 @@ function App() {
   // 選択中の建物に属する教室の写真URLを取得する。
   const selectedRoomIdsKey = selectedBuilding?.rooms.map(room => room.id).join('|') ?? ''
   useEffect(() => {
-    if (!selectedBuildingId || !selectedRoomIdsKey) {
-      setRoomPhotos({})
-      return
-    }
-
     let active = true
-    const roomIds = selectedRoomIdsKey.split('|')
+    const roomIds = selectedRoomIdsKey ? selectedRoomIdsKey.split('|') : []
     fetchRoomPhotos(roomIds)
       .then(photosByRoom => {
         if (active) setRoomPhotos(photosByRoom)
@@ -145,7 +143,7 @@ function App() {
       })
 
     return () => { active = false }
-  }, [selectedBuildingId, selectedRoomIdsKey])
+  }, [selectedBuildingId, selectedRoomIdsKey, roomPhotosVersion])
 
   // 別タブで開く認証リンクでも、URLから操作を再開する。
   useEffect(() => {
@@ -272,12 +270,14 @@ function App() {
       setErrorMessage('教室を確認できませんでした。画面を再読み込みしてください。')
       return
     }
-    if (uploadingRoomId) return
+    if (photoUploadLock.current) return
+    photoUploadLock.current = true
 
     setUploadingRoomId(roomId)
     setErrorMessage('')
     try {
-      const uploadedPhotos = await uploadRoomPhotos(roomId, files)
+      const uploadedPhotos = await uploadRoomPhotos(roomId, files, setPhotoProgress)
+      setRoomPhotosVersion(version => version + 1)
       setRoomPhotos(current => ({
         ...current,
         [roomId]: [...(current[roomId] ?? []), ...uploadedPhotos],
@@ -285,6 +285,8 @@ function App() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '写真を追加できませんでした。')
     } finally {
+      photoUploadLock.current = false
+      setPhotoProgress(null)
       setUploadingRoomId(null)
     }
   }
@@ -336,6 +338,7 @@ function App() {
             roomPhotos={roomPhotos}
             canPost={canPost}
             uploadingRoomId={uploadingRoomId}
+            photoProgress={photoProgress}
             onAddPhotos={handleAddRoomPhotos}
             onShowReviews={roomId => {
               setSelectedRoomId(roomId)

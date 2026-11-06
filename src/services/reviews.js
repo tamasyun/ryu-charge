@@ -1,24 +1,9 @@
 import { supabase } from '../lib/supabase'
 import { fetchAuthorNames } from './profiles'
+import { createPhotoUploader } from './photoUpload.js'
+import { createReviewDeleter } from './reviewDeletion.js'
 
-// 画像を Storage にアップロードして公開URLを取得する関数
-export async function uploadReviewImage(file) {
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${crypto.randomUUID()}.${fileExt}`
-  const filePath = `reviews/${fileName}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('review-images')
-    .upload(filePath, file)
-
-  if (uploadError) throw uploadError
-
-  const { data } = supabase.storage
-    .from('review-images')
-    .getPublicUrl(filePath)
-
-  return data.publicUrl
-}
+const uploadPhotos = createPhotoUploader(supabase)
 
 // レビュー一覧取得（image_url を追加）
 export async function fetchReviews(roomId) {
@@ -33,13 +18,17 @@ export async function fetchReviews(roomId) {
   return (data ?? []).map(review => ({ ...review, author_nickname: authorNames.get(review.user_id) }))
 }
 
-// レビュー作成（imageUrl を含めて保存）
-export async function createReview({ roomId, rating, comment, imageUrl = null }) {
+// 写真付きレビューはアップロードからDB登録・失敗時の回収まで一括して扱う。
+export async function createReview({ roomId, rating, comment, imageFile = null }) {
+  if (imageFile) {
+    await uploadPhotos({
+      bucket: 'review-images', folder: 'reviews', files: [imageFile], table: 'room_reviews',
+      makeRecord: (_path, imageUrl) => ({ room_id: roomId, rating, comment, image_url: imageUrl }),
+    })
+    return
+  }
   const { error } = await supabase.from('room_reviews').insert({
-    room_id: roomId,
-    rating,
-    comment,
-    image_url: imageUrl,
+    room_id: roomId, rating, comment, image_url: null,
   })
   if (error) throw error
 }
@@ -91,11 +80,4 @@ export async function checkUserHasReviewed(roomId) {
   return Boolean(data) // 既にレビューがあれば true、なければ false
 }
 
-export async function deleteReview(reviewId) {
-  const { error } = await supabase
-    .from('room_reviews')
-    .delete()
-    .eq('id', reviewId)
-
-  if (error) throw error
-}
+export const deleteReview = createReviewDeleter(supabase)

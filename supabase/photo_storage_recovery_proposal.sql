@@ -1,0 +1,7 @@
+-- 適用済み。ここにCREATE POLICYを追記したり、このファイルを再実行しないこと。
+-- 正式な履歴:
+-- migrations/20261106191625_photo_storage_owner_select_for_delete_many_20261107.sql
+-- ポリシー: photo_objects_owner_select_for_delete_many
+-- 旧提案 photo_cleanup_select_own_for_remove は未適用のまま廃止した。
+-- 本番は両バケット・owner_id=auth.uid()・storage.object.delete_many限定。
+-- 旧提案のフォルダ条件は含まない。通常の一覧取得は許可しない。

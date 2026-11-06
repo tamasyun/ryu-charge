@@ -1,3 +1,5 @@
+import PhotoViewer from '../photos/PhotoViewer'
+import { IMAGE_ACCEPT } from '../../utils/imageProcessor.js'
 import { authorLabel } from '../../utils/nickname'
 
 function reviewOverviewLabel(overview, buildingId, roomId) {
@@ -16,6 +18,7 @@ export default function BuildingRooms({
   roomPhotos = {},
   canPost,
   uploadingRoomId,
+  photoProgress,
   onAddPhotos,
   onShowReviews,
 }) {
@@ -38,12 +41,12 @@ export default function BuildingRooms({
             <div className="room-photo-section">
               {canPost && (
                 <label className={`room-photo-add ${isUploading ? 'is-uploading' : ''}`}>
-                  {isUploading ? 'アップロード中...' : '＋ 写真を追加'}
+                  {isUploading ? '写真を処理中...' : '＋ 写真を追加'}
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept={IMAGE_ACCEPT}
                     multiple
-                    disabled={isUploading}
+                    disabled={uploadingRoomId != null}
                     onChange={event => {
                       const files = Array.from(event.target.files ?? [])
                       if (files.length > 0) onAddPhotos(room.id, files)
@@ -53,24 +56,23 @@ export default function BuildingRooms({
                 </label>
               )}
 
+              {canPost && <small>1回5枚まで。写真は自動で変換・圧縮します（変換後1枚5MBまで）。</small>}
+              {isUploading && photoProgress && (
+                <p role="status">
+                  {photoProgress.phase === 'processing' ? '写真を変換中' : photoProgress.phase === 'saving' ? '写真を保存中' : 'アップロード中'}
+                  ... {photoProgress.current} / {photoProgress.total}枚
+                </p>
+              )}
               {photos.length > 0 && (
                 <div className="room-photo-list">
                   {photos.map(photo => (
-                    <a
-                      className="room-photo-item"
-                      href={photo.image_url}
-                      target="_blank"
-                      rel="noreferrer"
+                    <PhotoViewer
                       key={photo.id}
-                      aria-label={`${room.name}の写真を拡大表示`}
-                    >
-                      <img
-                        className="room-photo"
-                        src={photo.image_url}
-                        alt={`${room.name}のコンセント・教室の写真`}
-                        loading="lazy"
-                      />
-                    </a>
+                      src={photo.image_url}
+                      alt={`${room.name}のコンセント・教室の写真`}
+                      className="room-photo-item"
+                      imageClassName="room-photo"
+                    />
                   ))}
                 </div>
               )}
