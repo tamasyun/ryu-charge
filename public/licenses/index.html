@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>写真処理のオープンソースライセンス | 琉CHARGE</title>
+<body><h1>写真処理のオープンソースライセンス</h1>
+<p>写真の変換には以下のライブラリを使用しています。ライブラリは改変せず、必要な際に独立したWorkerとして読み込みます。</p>
+<ul>
+<li>heic-to 1.6.7 — Hopper Gee, LGPL-3.0-or-later。
+<a href="heic-to-LGPL-3.0.txt">ライセンス</a> / <a href="GPL-3.0.txt">GPL v3</a> /
+<a href="https://github.com/hoppergee/heic-to/archive/78345a3fcdb4a1d70d513fce2646aeff0127f7ba.tar.gz">対応するソースとビルド手順</a></li>
+<li>libheif 1.23.7 — struktur AG and contributors, LGPL-3.0-or-later。
+<a href="libheif-COPYING.txt">ライセンス</a> /
+<a href="https://github.com/strukturag/libheif/archive/refs/tags/v1.23.7.tar.gz">ソース</a></li>
+<li>libde265 1.0.16 — struktur AG and contributors, LGPL-3.0-or-later。
+<a href="libde265-COPYING.txt">ライセンス</a> /
+<a href="https://github.com/strukturag/libde265/archive/refs/tags/v1.0.16.tar.gz">ソース</a></li>
+<li>ExifReader 4.54.0 — Copyright (C) 2011-2026 Mattias Wallander, MPL-2.0。
+<a href="exifreader-MPL-2.0.txt">ライセンス</a> /
+<a href="https://github.com/mattiasw/ExifReader/archive/refs/tags/v4.54.0.tar.gz">対応するソース</a>。画像の向きの判定に使用し、ライブラリは改変していません。</li>
+<li>image-size 2.0.4 — <a href="image-size-MIT.txt">MIT / 著作権表示</a> /
+<a href="https://codeberg.org/image-size/image-size">ソース</a></li>
+<li>@jsquash/webp 1.5.0 — <a href="jsquash-Apache-2.0.txt">Apache-2.0</a> /
+<a href="https://github.com/jamsinclair/jSquash">ソース</a>。
+内包するlibwebpは<a href="libwebp-BSD-3-Clause.txt">BSD-3-Clause / 著作権表示</a>。</li>
+<li>@xmldom/xmldom 0.9.12 — ExifReaderの任意依存。<a href="xmldom-MIT.txt">MIT / 著作権表示</a>。</li>
+<li>wasm-feature-detect — <a href="wasm-feature-detect-Apache-2.0.txt">Apache-2.0 / 著作権表示</a></li>
+</ul>
+<p>LGPLライブラリの変更・差し替え、およびそのデバッグに必要なリバースエンジニアリングを妨げません。
+ソースは上記リンクから取得でき、heic-toのREADMEとesbuild.mjsで再ビルドできます。
+このアプリの依存パッケージheic-toを互換APIを持つ変更版に差し替え、npm run buildで再構築できます。</p>
+</body></html>
