@@ -14,6 +14,7 @@ import CampusMap from './components/map/CampusMap'
 import RoomReviews from './components/reviews/RoomReviews'
 import LoginDialog from './components/auth/LoginDialog'
 import ProfileDialog from './components/auth/ProfileDialog'
+import AccountSettingsDialog from './components/auth/AccountSettingsDialog'
 
 // 小さい画面でもヘッダーと追加ボタンを同時に表示できる高さを確保する。
 const PORTRAIT_SNAP_POINTS = ['200px', 0.5, 0.85]
@@ -42,8 +43,12 @@ function App() {
   const [loginIntent, setLoginIntent] = useState(null)
   const [redirectIntent, setRedirectIntent] = useState(readRedirectIntent)
   const [reviewOverviewVersion, setReviewOverviewVersion] = useState(0)
+  const [isAccountOpen, setIsAccountOpen] = useState(false)
+  const [accountNotice, setAccountNotice] = useState('')
+  const [authorVersion, setAuthorVersion] = useState(0)
+  const accountReturnFocusRef = useRef(null)
 
-  const { profile, status: profileStatus, reloadProfile } = useAccount(user)
+  const { profile, status: profileStatus, reloadProfile, updateProfile } = useAccount(user)
   const hasUniversityEmail = isUniversityEmail(user?.email)
   const canPost = authReady && hasUniversityEmail && profileStatus === 'ready'
   const needsNickname = hasUniversityEmail && profileStatus === 'missing'
@@ -55,6 +60,7 @@ function App() {
   const sheetSnapPoints = isLandscape ? LANDSCAPE_SNAP_POINTS : PORTRAIT_SNAP_POINTS
 
   function openLogin(intent = null, mode = 'login') {
+    setAccountNotice('')
     loginReturnFocusRef.current = document.activeElement
     setLoginIntent(intent)
     if (user) {
@@ -82,10 +88,40 @@ function App() {
       setUser(session?.user ?? null)
       setAuthReady(true)
       if (event === 'SIGNED_IN') setIsLoginOpen(false)
-      if (event === 'SIGNED_OUT') setIsFormOpen(false)
+      if (event === 'SIGNED_OUT') {
+        setIsFormOpen(false)
+        setIsAccountOpen(false)
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  function handleNicknameSaved(updated) {
+    updateProfile(updated)
+    setBuildings(items => items.map(building => ({
+      ...building,
+      rooms: building.rooms.map(room => ({
+        ...room,
+        author_nickname: room.user_id === updated.id ? updated.nickname : room.author_nickname,
+        outlets: room.outlets.map(outlet => ({
+          ...outlet, author_nickname: outlet.user_id === updated.id ? updated.nickname : outlet.author_nickname,
+        })),
+      })),
+    })))
+    setAuthorVersion(value => value + 1)
+  }
+
+  function handleAccountDeleted(confirmed = true) {
+    setUser(null)
+    setIsAccountOpen(false)
+    setIsFormOpen(false)
+    setLoginIntent(null)
+    setDetailView('details')
+    setAccountNotice(confirmed ? 'アカウントを削除しました。' : 'セッションが無効になりました。再ログインして削除状態を確認してください。')
+    setAuthorVersion(value => value + 1)
+    setReviewOverviewVersion(value => value + 1)
+    loadBuildings().catch(() => setErrorMessage('設備情報を再取得できませんでした。ページを再読み込みしてください。'))
+  }
 
   async function handleSignOut() {
     if (signingOut) return
@@ -242,6 +278,7 @@ function App() {
       <>
         {detailView !== 'details' && selectedRoom ? (
           <RoomReviews
+            authorVersion={authorVersion}
             key={selectedRoom.id}
             roomId={selectedRoom.id}
             roomName={selectedRoom.name}
@@ -332,7 +369,11 @@ function App() {
           ) : user ? (
             <>
               {profileStatus === 'ready' ? (
-                <span className="auth-nickname" title={profile.nickname}>{profile.nickname}</span>
+                <button type="button" className="auth-nickname auth-nickname-button" title={profile.nickname}
+                  aria-label={`${profile.nickname}のアカウント設定`} onClick={event => {
+                    accountReturnFocusRef.current = event.currentTarget
+                    setIsAccountOpen(true)
+                  }}>{profile.nickname}</button>
               ) : needsNickname ? (
                 <button type="button" className="auth-button" aria-label="ニックネームを設定" onClick={() => setDismissedProfileUserId(null)}>
                   名前を設定
@@ -361,7 +402,14 @@ function App() {
         onClose={closeLogin}
         onAfterClose={restoreLoginFocus}
         returnFocusRef={loginReturnFocusRef}
+        onPasskeyNotice={setAccountNotice}
       />
+
+      {user && profile && <AccountSettingsDialog key={`settings-${user.id}`} open={isAccountOpen}
+        user={user} profile={profile} returnFocusRef={accountReturnFocusRef}
+        onClose={() => setIsAccountOpen(false)} onSaved={handleNicknameSaved} onDeleted={handleAccountDeleted} />}
+
+      {accountNotice && <p role="status" className="app-account-notice">{accountNotice}</p>}
 
       {user && (
         <ProfileDialog

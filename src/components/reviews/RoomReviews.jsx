@@ -4,7 +4,7 @@ import ReviewList from './ReviewList'
 import './RoomReviews.css'
 import { checkUserHasReviewed } from '../../services/reviews'
 
-export default function RoomReviews({ roomId, roomName, mode, canPost, authReady, isLoggedIn, onWrite, onLogin, onBack, onSubmitted }) {
+export default function RoomReviews({ roomId, roomName, mode, canPost, authReady, isLoggedIn, onWrite, onLogin, onBack, onSubmitted, authorVersion }) {
   const [hasReviewed, setHasReviewed] = useState(false)
 
   // 部屋が変わった時やログイン状態が変わった時に、投稿済みか確認する
@@ -65,7 +65,7 @@ export default function RoomReviews({ roomId, roomName, mode, canPost, authReady
                 : 'レビューを投稿'}
             </button>
           </div>
-          <ReviewList roomId={roomId} onDeleted={() => setHasReviewed(false)} />
+          <ReviewList roomId={roomId} authorVersion={authorVersion} onDeleted={() => setHasReviewed(false)} />
         </>
       )}
     </section>

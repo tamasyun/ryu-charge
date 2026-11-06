@@ -4,6 +4,7 @@ import { Turnstile } from '@marsidev/react-turnstile'
 import { setKeepSignedIn, supabase } from '../../lib/supabase'
 import { isUniversityEmail } from '../../utils/universityEmail'
 import { createAccountService } from '../../services/account'
+import { createPasskeyService, passkeyErrorMessage, supportsPasskeys } from '../../services/passkeys'
 import NicknameField from './NicknameField'
 import { isValidNickname } from '../../utils/nickname'
 import './LoginDialog.css'
@@ -11,6 +12,7 @@ import './LoginDialogOtp.css'
 
 const REMEMBERED_EMAIL_KEY = 'ryu-charge:remembered-email'
 const account = createAccountService(supabase)
+const passkeys = createPasskeyService(supabase)
 const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? ''
 
 function readRememberedEmail() {
@@ -52,7 +54,7 @@ function authErrorMessage(error, action, mode) {
   return '認証コードを送信できませんでした。入力内容と通信状況を確認して、もう一度お試しください。'
 }
 
-function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
+function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNotice }) {
   const emailInputId = useId()
   const codeInputId = useId()
 
@@ -155,12 +157,39 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
     setNotice('')
     try {
       setKeepSignedIn(keepSignedIn)
-      await account.verifyCode({ email: sentRequest.email, code })
+      const data = await account.verifyCode({ email: sentRequest.email, code })
       // 認証後の追加・レビュー画面の復元はApp.jsxで行う。
       onClose()
+      if (sentRequest.mode === 'signup' && data?.user) {
+        try {
+          await account.registerInitialPasskey(data.user)
+        } catch {
+          onPasskeyNotice?.('ログインは完了しています。パスキーはアカウント設定から登録できます。')
+        }
+      }
     } catch (error) {
       setErrorMessage(authErrorMessage(error, 'verify'))
     } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handlePasskeyLogin() {
+    if (busy || !canSendWithCaptcha()) return
+    setBusy(true)
+    setErrorMessage('')
+    setNotice('')
+    const token = captchaToken
+    setCaptchaToken('')
+    try {
+      setKeepSignedIn(keepSignedIn)
+      await passkeys.signIn(token)
+      onClose()
+    } catch (error) {
+      setErrorMessage(error?.code === 'captcha_failed'
+        ? authErrorMessage(error, 'send', 'login') : passkeyErrorMessage(error))
+    } finally {
+      resetCaptcha()
       setBusy(false)
     }
   }
@@ -295,6 +324,18 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
             <button type="submit" className="login-submit" disabled={busy || resendWait > 0 || captchaPending}>
               {busy ? '送信中...' : resendWait > 0 ? `送信まで ${resendWait}秒` : '認証コードを送信'}
             </button>
+            {mode === 'login' && <>
+              <label className="login-remember">
+                <input type="checkbox" checked={keepSignedIn} disabled={busy}
+                  onChange={event => setKeepSignedInChoice(event.target.checked)} />
+                <span>ログイン状態を保持する</span>
+              </label>
+              <button type="button" className="auth-button" onClick={handlePasskeyLogin}
+                disabled={busy || captchaPending || !supportsPasskeys()}>
+                パスキーでログイン
+              </button>
+              {!supportsPasskeys() && <p className="nickname-note">この環境ではパスキーを利用できません。メール認証をご利用ください。</p>}
+            </>}
           </form>
         ) : (
           <form className="login-form" onSubmit={handleVerify}>
@@ -361,7 +402,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
   )
 }
 
-export default function LoginDialog({ open, initialMode = 'login', onClose, onAfterClose, returnFocusRef }) {
+export default function LoginDialog({ open, initialMode = 'login', onClose, onAfterClose, returnFocusRef, onPasskeyNotice }) {
   return (
     <Dialog.Root
       open={open}
@@ -371,7 +412,7 @@ export default function LoginDialog({ open, initialMode = 'login', onClose, onAf
       <Dialog.Portal>
         <Dialog.Backdrop className="login-overlay" />
         <Dialog.Viewport className="login-viewport">
-          <LoginDialogContent initialMode={initialMode} onClose={onClose} returnFocusRef={returnFocusRef} />
+          <LoginDialogContent initialMode={initialMode} onClose={onClose} returnFocusRef={returnFocusRef} onPasskeyNotice={onPasskeyNotice} />
         </Dialog.Viewport>
       </Dialog.Portal>
     </Dialog.Root>

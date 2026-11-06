@@ -1,0 +1,40 @@
+.auth-nickname-button {
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.auth-nickname-button:focus-visible { outline: 2px solid #2563eb; }
+.app-account-notice { padding: 10px 16px; margin: 0; color: var(--text-h); background: var(--code-bg); font-size: 14px; }
+.account-dialog { width: min(520px, 100%); }
+.account-description, .account-section p { color: var(--text); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.account-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.account-section h3 { margin: 0 0 16px; font-size: 17px; }
+.account-form { display: grid; gap: 12px; margin: 12px 0; }
+.account-form input:not([type='checkbox']) {
+  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text-h);
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 16px;
+}
+.account-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.account-actions button, .account-section > button, .account-delete-button { min-height: 44px; }
+.account-passkeys { padding: 0; list-style: none; }
+.account-passkey { margin-top: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.account-passkey small { color: var(--text); font-size: 12px; }
+.account-delete-button { padding: 12px; border: 0; border-radius: 7px; background: #b91c1c; color: white; font: inherit; cursor: pointer; }
+.account-delete-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.account-danger h3 { color: var(--error); }
+.account-confirm { border-top: 1px solid var(--border); margin-top: 12px; }

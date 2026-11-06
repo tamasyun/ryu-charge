@@ -4,11 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const auth = vi.hoisted(() => ({
   signInWithOtp: vi.fn(), verifyOtp: vi.fn(), setKeepSignedIn: vi.fn(),
+  signInWithPasskey: vi.fn(), registerPasskey: vi.fn(), signOut: vi.fn(), rpc: vi.fn(), from: vi.fn(),
 }))
 const captcha = vi.hoisted(() => ({ props: null, reset: vi.fn(), expired: false }))
 
 vi.mock('../src/lib/supabase', () => ({
-  supabase: { auth }, setKeepSignedIn: auth.setKeepSignedIn,
+  supabase: { auth, rpc: auth.rpc, from: auth.from }, setKeepSignedIn: auth.setKeepSignedIn,
 }))
 vi.mock('@marsidev/react-turnstile', async () => {
   const { useImperativeHandle } = await import('react')
@@ -30,6 +31,10 @@ beforeEach(async () => {
   vi.clearAllMocks()
   auth.signInWithOtp.mockResolvedValue({ error: null })
   auth.verifyOtp.mockResolvedValue({ error: null })
+  auth.signInWithPasskey.mockResolvedValue({ data: { user: { id: 'user-1', email } }, error: null })
+  auth.registerPasskey.mockResolvedValue({ data: { id: 'key-1' }, error: null })
+  auth.rpc.mockResolvedValue({ data: false, error: null })
+  auth.from.mockReturnValue({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'user-1', nickname: 'りゅう' }, error: null }) }) }) })
   captcha.expired = false
   captcha.props = null
   // Node側のWeb Storageではなく、ブラウザーの保存領域を模擬する。
@@ -46,7 +51,7 @@ afterEach(() => {
 
 function openDialog(initialMode = 'login') {
   const onClose = vi.fn()
-  const props = { open: true, initialMode, onClose, onAfterClose: vi.fn(), returnFocusRef: { current: null } }
+  const props = { open: true, initialMode, onClose, onAfterClose: vi.fn(), returnFocusRef: { current: null }, onPasskeyNotice: vi.fn() }
   const view = render(<LoginDialog {...props} />)
   fireEvent.change(screen.getByLabelText('メールアドレス'), { target: { value: email } })
   if (initialMode === 'signup') {
@@ -231,5 +236,71 @@ describe('without a Site Key', () => {
     expect(screen.getByRole('alert').textContent).toContain('設定に問題')
     expect(auth.signInWithOtp).toHaveBeenCalledTimes(1)
     expect(auth.signInWithOtp.mock.calls[0][0].options).toEqual({ shouldCreateUser: false })
+  })
+})
+
+describe('passkey login and direct signup enrollment', () => {
+  function enableWebAuthn() {
+    vi.stubGlobal('PublicKeyCredential', class {})
+    vi.stubGlobal('isSecureContext', true)
+    Object.defineProperty(window.navigator, 'credentials', { configurable: true, value: { create() {}, get() {} } })
+  }
+
+  it('requires CAPTCHA for passkey login and keeps the selected persistence preference', async () => {
+    enableWebAuthn()
+    const view = openDialog()
+    const button = screen.getByRole('button', { name: 'パスキーでログイン' })
+    expect(button.disabled).toBe(true)
+    solve('passkey-captcha')
+    fireEvent.click(screen.getByLabelText('ログイン状態を保持する'))
+    await act(async () => fireEvent.click(button))
+    expect(auth.signInWithPasskey).toHaveBeenCalledExactlyOnceWith({ options: { captchaToken: 'passkey-captcha' } })
+    expect(auth.setKeepSignedIn).toHaveBeenCalledWith(false)
+    expect(captcha.reset).toHaveBeenCalledTimes(1)
+    expect(view.onClose).toHaveBeenCalled()
+    expect(auth.registerPasskey).not.toHaveBeenCalled()
+  })
+
+  it('cancelling passkey login permits a fresh attempt or email OTP', async () => {
+    enableWebAuthn()
+    openDialog()
+    auth.signInWithPasskey.mockResolvedValueOnce({ error: { name: 'NotAllowedError' } })
+    solve()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'パスキーでログイン' })))
+    expect(screen.getByRole('alert').textContent).toContain('キャンセル')
+    expect(auth.signOut).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '認証コードを送信' }).disabled).toBe(true)
+    solve('fresh-email-token')
+    await send()
+    expect(screen.getByLabelText('認証コード')).toBeTruthy()
+  })
+
+  it.each([false, true])('first signup invokes registerPasskey directly; cancellation=%s preserves sign-in', async cancelled => {
+    const view = openDialog('signup')
+    auth.verifyOtp.mockResolvedValueOnce({ data: { user: { id: 'user-1', email } }, error: null })
+    auth.rpc.mockResolvedValueOnce({ data: true, error: null })
+    if (cancelled) auth.registerPasskey.mockResolvedValueOnce({ error: { name: 'NotAllowedError', message: 'Safari user gesture required' } })
+    solve()
+    await send()
+    fireEvent.change(screen.getByLabelText('認証コード'), { target: { value: '12345678' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '認証して登録' })))
+    expect(auth.rpc).toHaveBeenCalledExactlyOnceWith('claim_initial_passkey_enrollment')
+    expect(auth.registerPasskey).toHaveBeenCalledTimes(1)
+    expect(auth.verifyOtp.mock.invocationCallOrder[0]).toBeLessThan(auth.from.mock.invocationCallOrder[0])
+    expect(auth.from.mock.invocationCallOrder[0]).toBeLessThan(auth.registerPasskey.mock.invocationCallOrder[0])
+    expect(view.onClose).toHaveBeenCalled()
+    expect(auth.signOut).not.toHaveBeenCalled()
+    if (cancelled) expect(view.props.onPasskeyNotice).toHaveBeenCalledWith(expect.stringContaining('ログインは完了'))
+    expect(screen.queryByText('パスキーを登録しますか？')).toBeNull()
+  })
+
+  it('existing signup without an enrollment claim does not automatically register a passkey', async () => {
+    openDialog('signup')
+    auth.verifyOtp.mockResolvedValueOnce({ data: { user: { id: 'user-1', email } }, error: null })
+    solve()
+    await send()
+    fireEvent.change(screen.getByLabelText('認証コード'), { target: { value: '12345678' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '認証して登録' })))
+    expect(auth.registerPasskey).not.toHaveBeenCalled()
   })
 })

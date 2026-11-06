@@ -155,3 +155,13 @@ VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA npm run dev
 テスト用Site Keyのトークンは本番のSecret Keyでは検証できません。Supabaseまで含める結合確認は、本番と分離したプロジェクトで公式手順に沿って行ってください。本番では実際のウィジェットのSite Keyを使います。
 
 トークンは[5分間有効・1回限り](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/)です。自動更新に加えて送信直前にも期限を確認しています。
+
+## アカウント設定・パスキー・アカウント削除
+
+ログイン後、ヘッダーのユーザー名から設定を開けます。ユーザー名変更は `profiles.nickname` を更新し、ヘッダー・設備の投稿者名・レビュー一覧に反映します。パスキーはSupabase公式の `auth.registerPasskey()` / `auth.signInWithPasskey()` / `auth.passkey` APIを使用します。
+
+現在の `supabase-js 2.117.3` はパスキーAPIが既定で有効です。`experimental.passkey` は2.117.0から非推奨で、指定しても無視されるため追加していません。[公式変更履歴](https://github.com/supabase/supabase-js/blob/master/packages/core/supabase-js/CHANGELOG.md#21170-2026-09-22)と[パスキーの手順](https://supabase.com/docs/guides/auth/passkeys)を参照してください。
+
+初回新規登録では8桁OTPとプロフィール作成の完了後、事前案内ダイアログを挟まず標準のパスキー登録画面を直接呼び出します。初回メール確認時の一度限りの権利をDBで消費し、キャンセル・Safariの操作制限時はログインを維持します。通常ログイン・再読込では自動登録しません。手動登録は設定から利用できます。
+
+アカウント削除は専用のEdge FunctionでメールOTPによる再確認と最終確認を検証します。管理用キーはブラウザーに渡しません。**利用前にDBマイグレーションの適用、Supabaseのパスキー設定、Edge Functionの配備が必要です。** [設定・削除の復旧手順と検証範囲](supabase/ACCOUNT_SECURITY.md)を確認してください。

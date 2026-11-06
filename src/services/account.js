@@ -46,8 +46,33 @@ export function createAccountService(client) {
 
     async verifyCode({ email, code }) {
       if (!/^\d{8}$/.test(code)) throw new Error('8桁の認証コードを入力してください。')
-      const { error } = await client.auth.verifyOtp({ email, token: code, type: 'email' })
+      const { data, error } = await client.auth.verifyOtp({ email, token: code, type: 'email' })
       if (error) throw error
+      return data
+    },
+
+    async updateNickname(user, value) {
+      const nickname = normalizeNickname(value)
+      if (!user?.id || !isUniversityEmail(user.email) || !isValidNickname(nickname)) {
+        throw new Error('ニックネームを1〜20文字で入力してください。')
+      }
+      const { data, error } = await client.from('profiles').update({ nickname })
+        .eq('id', user.id).select('id, nickname').single()
+      if (error) throw error
+      return data
+    },
+
+    async registerInitialPasskey(user) {
+      // 呼び出し元は新規登録のOTP完了ハンドラーのみ。再読込・通常ログインでは呼ばない。
+      const profile = await this.loadProfile(user)
+      if (!profile) return false
+      const { data: claimed, error } = await client.rpc('claim_initial_passkey_enrollment')
+      if (error) throw error
+      if (!claimed) return false
+      // DBの一度限りの権利を先に消費する。キャンセルやSafariの制限時も自動再試行しない。
+      const { error: registrationError } = await client.auth.registerPasskey()
+      if (registrationError) throw registrationError
+      return true
     },
 
     async loadProfile(user) {
