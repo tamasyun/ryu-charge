@@ -90,6 +90,7 @@ cp .env.example .env.local
 
 - `VITE_SUPABASE_URL`：Supabase の Project URL
 - `VITE_SUPABASE_PUBLISHABLE_KEY`：フロントエンド用の publishable key
+- `VITE_TURNSTILE_SITE_KEY`：Cloudflare Turnstile の公開用 Site Key（導入手順は下記）
 
 `.env.local` は Git の管理対象外です。`VITE_` で始まる変数は配信する JavaScript に含まれるため、`service_role` キーや DB パスワードを設定しないでください。変更後は開発サーバーを再起動します。
 
@@ -113,4 +114,5 @@ http://localhost:5173/
 | `npm run build` | 本番環境向けにビルド |
 | `npm run preview` | ビルド結果をローカルで確認 |
 | `npm run lint` | ESLintでコードをチェック |
-| `npm test` | 認証・画像変換・写真投稿のフォームと失敗時の処理をテスト |
+| `npm test` | 認証・アカウント設定・画像変換・写真投稿のフォームと失敗時の処理をテスト |
+| `npm run test:ui` | CAPTCHAを含む認証画面をテスト（外部サービスはモック） |

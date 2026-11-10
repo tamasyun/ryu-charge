@@ -66,6 +66,36 @@ test('invalid names, modes and university lookalike domains never reach the auth
   assert.equal(normalizeNickname('　りゅう '), 'りゅう')
 })
 
+test('login and signup pass each fresh CAPTCHA token without changing OTP options', async () => {
+  for (const mode of ['login', 'signup']) {
+    const { account, requests } = fixture()
+    const request = { email: user.email, mode, nickname: '　りゅう　' }
+    await account.sendCode({ ...request, captchaToken: 'first-token' })
+    await account.sendCode({ ...request, captchaToken: 'resend-token' })
+    assert.deepEqual(requests, ['first-token', 'resend-token'].map(captchaToken => ({
+      email: user.email,
+      options: {
+        shouldCreateUser: mode === 'signup',
+        ...(mode === 'signup' ? { data: { nickname: 'りゅう' } } : {}),
+        captchaToken,
+      },
+    })))
+    assert.equal('captchaToken' in request, false)
+  }
+})
+
+test('CAPTCHA rejection is propagated without retrying the API without a token', async () => {
+  const f = fixture()
+  const error = { code: 'captcha_failed', status: 400 }
+  f.failAuth(error)
+  await assert.rejects(
+    f.account.sendCode({ email: user.email, mode: 'login', captchaToken: 'rejected-token' }),
+    actual => actual === error,
+  )
+  assert.equal(f.requests.length, 1)
+  assert.equal(f.requests[0].options.captchaToken, 'rejected-token')
+})
+
 test('both modes use the same eight-digit OTP verification and propagate auth failures', async () => {
   const f = fixture()
   for (const code of ['123456', '123456789', 'abcdefgh']) {

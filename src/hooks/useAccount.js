@@ -11,6 +11,9 @@ export function useAccount(user) {
   const [result, setResult] = useState(null)
   const [revision, setRevision] = useState(0)
   const reloadProfile = useCallback(() => setRevision(value => value + 1), [])
+  const updateProfile = useCallback(profile => {
+    setResult({ userId, revision, profile, status: 'ready' })
+  }, [userId, revision])
 
   useEffect(() => {
     if (!userId) return undefined
@@ -27,5 +30,5 @@ export function useAccount(user) {
     ? result
     : { profile: null, status: userId ? 'loading' : 'idle' }
 
-  return { profile: current.profile, status: current.status, reloadProfile }
+  return { profile: current.profile, status: current.status, reloadProfile, updateProfile }
 }

@@ -1,15 +1,19 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { setKeepSignedIn, supabase } from '../../lib/supabase'
 import { isUniversityEmail } from '../../utils/universityEmail'
 import { createAccountService } from '../../services/account'
+import { createPasskeyService, passkeyErrorMessage, supportsPasskeys } from '../../services/passkeys'
 import NicknameField from './NicknameField'
+import SecurityChallenge from './SecurityChallenge'
 import { isValidNickname } from '../../utils/nickname'
 import './LoginDialog.css'
 import './LoginDialogOtp.css'
 
 const REMEMBERED_EMAIL_KEY = 'ryu-charge:remembered-email'
 const account = createAccountService(supabase)
+const passkeys = createPasskeyService(supabase)
+const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? ''
 
 function readRememberedEmail() {
   try {
@@ -33,6 +37,11 @@ function storeRememberedEmail(email, shouldRemember) {
 }
 
 function authErrorMessage(error, action, mode) {
+  if (error?.code === 'captcha_failed') {
+    return turnstileSiteKey
+      ? 'セキュリティ確認に失敗しました。もう一度確認を完了してから送信してください。繰り返し失敗する場合は管理者にお問い合わせください。'
+      : 'セキュリティ確認の設定に問題があります。管理者にお問い合わせください。'
+  }
   if (error?.status === 429) {
     return '短時間に多くのリクエストがありました。しばらく待ってからお試しください。'
   }
@@ -45,7 +54,7 @@ function authErrorMessage(error, action, mode) {
   return '認証コードを送信できませんでした。入力内容と通信状況を確認して、もう一度お試しください。'
 }
 
-function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
+function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNotice }) {
   const emailInputId = useId()
   const codeInputId = useId()
 
@@ -61,6 +70,27 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
   const [errorMessage, setErrorMessage] = useState('')
   const [notice, setNotice] = useState('')
   const [resendWait, setResendWait] = useState(0)
+  const captchaRef = useRef(null)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const [resendChallengeOpen, setResendChallengeOpen] = useState(false)
+  const resendRequestedRef = useRef(false)
+  const resendSendingRef = useRef(false)
+  const captchaPending = Boolean(turnstileSiteKey) && !captchaToken
+
+  function resetCaptcha() {
+    setCaptchaToken('')
+    captchaRef.current?.reset()
+  }
+
+  function canSendWithCaptcha() {
+    if (!turnstileSiteKey) return true
+    if (!captchaToken || captchaRef.current?.isExpired()) {
+      setErrorMessage('セキュリティ確認を完了してください。')
+      resetCaptcha()
+      return false
+    }
+    return true
+  }
 
   useEffect(() => {
     if (resendWait <= 0) return undefined
@@ -87,11 +117,15 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
       setErrorMessage('ニックネームを1〜20文字で入力してください。')
       return
     }
+    if (!canSendWithCaptcha()) return
 
     setBusy(true)
+    // トークンは1回限り。再送信に使うリクエストには保存しない。
+    const token = captchaToken
+    setCaptchaToken('')
     try {
       const request = { email: normalizedEmail, mode, nickname }
-      await account.sendCode(request)
+      await account.sendCode({ ...request, captchaToken: token })
       storeRememberedEmail(normalizedEmail, rememberEmail)
       setEmail(normalizedEmail)
       setSentRequest(request)
@@ -101,6 +135,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
     } catch (error) {
       setErrorMessage(authErrorMessage(error, 'send', mode))
     } finally {
+      resetCaptcha()
       setBusy(false)
     }
   }
@@ -113,14 +148,25 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
       return
     }
 
+    // コード照合中に遅れてCAPTCHAが完了しても、再送信でコードを入れ替えない。
+    resendRequestedRef.current = false
+    setResendChallengeOpen(false)
+    setCaptchaToken('')
     setBusy(true)
     setErrorMessage('')
     setNotice('')
     try {
       setKeepSignedIn(keepSignedIn)
-      await account.verifyCode({ email: sentRequest.email, code })
+      const data = await account.verifyCode({ email: sentRequest.email, code })
       // 認証後の追加・レビュー画面の復元はApp.jsxで行う。
       onClose()
+      if (sentRequest.mode === 'signup' && data?.user) {
+        try {
+          await account.registerInitialPasskey(data.user)
+        } catch {
+          onPasskeyNotice?.('ログインは完了しています。パスキーはアカウント設定から登録できます。')
+        }
+      }
     } catch (error) {
       setErrorMessage(authErrorMessage(error, 'verify'))
     } finally {
@@ -128,22 +174,75 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
     }
   }
 
-  async function handleResend() {
-    if (busy || resendWait > 0) return
+  async function handlePasskeyLogin() {
+    if (busy || !canSendWithCaptcha()) return
     setBusy(true)
     setErrorMessage('')
     setNotice('')
+    const token = captchaToken
+    setCaptchaToken('')
     try {
-      await account.sendCode(sentRequest)
+      setKeepSignedIn(true)
+      await passkeys.signIn(token)
+      onClose()
+    } catch (error) {
+      setErrorMessage(error?.code === 'captcha_failed'
+        ? authErrorMessage(error, 'send', 'login') : passkeyErrorMessage(error))
+    } finally {
+      resetCaptcha()
+      setBusy(false)
+    }
+  }
+
+  async function handleResend() {
+    if (busy || resendWait > 0) return
+    setErrorMessage('')
+    setNotice('')
+    if (turnstileSiteKey && (!resendChallengeOpen || !captchaToken || captchaRef.current?.isExpired())) {
+      // 再送信を選んだときだけ表示し、確認が済んだら一度だけ送信する。
+      resendRequestedRef.current = true
+      setCaptchaToken('')
+      setResendChallengeOpen(true)
+      if (resendChallengeOpen) captchaRef.current?.reset()
+      return
+    }
+    await resendCode(captchaToken)
+  }
+
+  function receiveResendToken(token) {
+    setCaptchaToken(token)
+    if (token && resendRequestedRef.current) {
+      resendRequestedRef.current = false
+      void resendCode(token)
+    }
+  }
+
+  async function resendCode(token) {
+    if (resendSendingRef.current) return
+    resendSendingRef.current = true
+    setBusy(true)
+    setCaptchaToken('')
+    setErrorMessage('')
+    setNotice('')
+    try {
+      await account.sendCode({ ...sentRequest, captchaToken: token })
       setCode('')
+      setResendChallengeOpen(false)
       setResendWait(60)
       setNotice('認証コードを再送信しました。')
     } catch (error) {
       setErrorMessage(authErrorMessage(error, 'send', sentRequest.mode))
     } finally {
+      resetCaptcha()
       setBusy(false)
+      resendSendingRef.current = false
     }
   }
+
+  const captcha = turnstileSiteKey && (
+    <SecurityChallenge siteKey={turnstileSiteKey} widgetRef={captchaRef}
+      onTokenChange={setCaptchaToken} />
+  )
 
   return (
     <Dialog.Popup
@@ -182,11 +281,10 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
 
         {step === 'email' ? (
           <form className="login-form" onSubmit={handleSend}>
-            <p>琉球大学のメールアドレスに認証コードを送信します。</p>
             {mode === 'signup' && (
               <NicknameField value={nickname} onChange={setNickname} disabled={busy} autoFocus />
             )}
-            <label htmlFor={emailInputId}>メールアドレス</label>
+            <label htmlFor={emailInputId}>大学のメールアドレス</label>
             <input
               id={emailInputId}
               type="email"
@@ -211,16 +309,23 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
               />
               <span>メールアドレスを記憶する</span>
             </label>
-            <button type="submit" className="login-submit" disabled={busy || resendWait > 0}>
+            {captcha}
+            <button type="submit" className="login-submit" disabled={busy || resendWait > 0 || captchaPending}>
               {busy ? '送信中...' : resendWait > 0 ? `送信まで ${resendWait}秒` : '認証コードを送信'}
             </button>
+            {mode === 'login' && <>
+              <button type="button" className="auth-button" onClick={handlePasskeyLogin}
+                disabled={busy || captchaPending || !supportsPasskeys()}>
+                パスキーでログイン
+              </button>
+              {!supportsPasskeys() && <p className="nickname-note">この環境ではパスキーを利用できません。メール認証をご利用ください。</p>}
+            </>}
           </form>
         ) : (
           <form className="login-form" onSubmit={handleVerify}>
             <p>
               <strong className="login-destination">{sentRequest.email}</strong>
-              に届いた認証コードを入力してください。
-              届かない場合は、迷惑メールフォルダをご確認ください。
+              に届いた8桁のコードを入力してください。
             </p>
             <label htmlFor={codeInputId}>認証コード</label>
             <input
@@ -259,10 +364,12 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
               {busy ? '確認中...' : sentRequest.mode === 'signup' ? '認証して登録' : 'ログイン'}
             </button>
             <div className="login-code-actions">
+              {turnstileSiteKey && resendChallengeOpen && <SecurityChallenge siteKey={turnstileSiteKey}
+                widgetRef={captchaRef} onTokenChange={receiveResendToken} />}
               <button
                 className="login-secondary"
                 type="button"
-                disabled={busy || resendWait > 0}
+                disabled={busy || resendWait > 0 || (resendChallengeOpen && captchaPending)}
                 onClick={handleResend}
               >
                 {resendWait > 0
@@ -279,7 +386,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef }) {
   )
 }
 
-export default function LoginDialog({ open, initialMode = 'login', onClose, onAfterClose, returnFocusRef }) {
+export default function LoginDialog({ open, initialMode = 'login', onClose, onAfterClose, returnFocusRef, onPasskeyNotice }) {
   return (
     <Dialog.Root
       open={open}
@@ -289,7 +396,7 @@ export default function LoginDialog({ open, initialMode = 'login', onClose, onAf
       <Dialog.Portal>
         <Dialog.Backdrop className="login-overlay" />
         <Dialog.Viewport className="login-viewport">
-          <LoginDialogContent initialMode={initialMode} onClose={onClose} returnFocusRef={returnFocusRef} />
+          <LoginDialogContent initialMode={initialMode} onClose={onClose} returnFocusRef={returnFocusRef} onPasskeyNotice={onPasskeyNotice} />
         </Dialog.Viewport>
       </Dialog.Portal>
     </Dialog.Root>
