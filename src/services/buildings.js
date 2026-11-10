@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabase'
 import { fetchAuthorNames } from './profiles'
+import { createBuildingDeleters } from './buildingDeletion.js'
+
+export const { deleteRoom, deleteOutlet } = createBuildingDeleters(supabase)
 
 export async function createRoom(record) {
   const { error } = await supabase.from('rooms').insert(record)

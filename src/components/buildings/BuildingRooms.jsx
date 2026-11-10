@@ -17,10 +17,14 @@ export default function BuildingRooms({
   reviewOverview,
   roomPhotos = {},
   canPost,
+  currentUserId,
+  deletingItem = null,
   uploadingRoomId,
   photoProgress,
   onAddPhotos,
   onShowReviews,
+  onDeleteRoom,
+  onDeleteOutlet,
 }) {
   return (
     <>
@@ -31,11 +35,22 @@ export default function BuildingRooms({
 
         return (
           <section key={room.id} className="room-detail">
-            <h3>
-              {room.name}
-              {room.floor != null ? `（${room.floor}階）` : ''}
-              <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
-            </h3>
+            <div className="room-detail-heading">
+              <h3>
+                {room.name}
+                {room.floor != null ? `（${room.floor}階）` : ''}
+                <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
+              </h3>
+              {currentUserId && room.user_id === currentUserId && (
+                <button
+                  type="button"
+                  className="delete-data-button"
+                  aria-label={`${room.name}を削除`}
+                  disabled={deletingItem != null || uploadingRoomId != null}
+                  onClick={() => onDeleteRoom(room)}
+                >{deletingItem?.type === 'room' && deletingItem.id === room.id ? '削除中...' : '教室を削除'}</button>
+              )}
+            </div>
             <p>{room.location_detail}</p>
 
             <div className="room-photo-section">
@@ -50,7 +65,7 @@ export default function BuildingRooms({
                   />
                 ))}
                 {canPost && (
-                  <label className={`room-photo-add ${uploadingRoomId != null ? 'is-disabled' : ''}`}>
+                  <label className={`room-photo-add ${uploadingRoomId != null || deletingItem != null ? 'is-disabled' : ''}`}>
                     <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
                       <path d="M14 5h-3l-2 3H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6" strokeLinecap="round" strokeLinejoin="round" />
                       <circle cx="12" cy="13" r="3" />
@@ -62,7 +77,7 @@ export default function BuildingRooms({
                       aria-label={`${room.name}に写真を追加`}
                       accept={IMAGE_ACCEPT}
                       multiple
-                      disabled={uploadingRoomId != null}
+                      disabled={uploadingRoomId != null || deletingItem != null}
                       onChange={event => {
                         const files = Array.from(event.target.files ?? [])
                         if (files.length > 0) onAddPhotos(room.id, files)
@@ -87,15 +102,26 @@ export default function BuildingRooms({
                 {room.outlets.map(outlet => (
                   <li key={outlet.id}>
                     <strong>{outlet.location_detail}</strong>
-                    <div>
-                      <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
-                      <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
+                    <div className="outlet-detail-footer">
+                      <div>
+                        <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
+                        <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
+                      </div>
+                      {currentUserId && outlet.user_id === currentUserId && (
+                        <button
+                          type="button"
+                          className="delete-data-button"
+                          aria-label={`${room.name}の${outlet.location_detail}のコンセントを削除`}
+                          disabled={deletingItem != null || uploadingRoomId != null}
+                          onClick={() => onDeleteOutlet(outlet)}
+                        >{deletingItem?.type === 'outlet' && deletingItem.id === outlet.id ? '削除中...' : '削除'}</button>
+                      )}
                     </div>
                   </li>
                 ))}
               </ul>
             )}
-            <button type="button" className="review-list-link" onClick={() => onShowReviews(room.id)}>
+            <button type="button" className="review-list-link" disabled={deletingItem != null} onClick={() => onShowReviews(room.id)}>
               <span className="review-link-content">
                 <span>レビューを見る</span>
                 <span className="review-link-overview">

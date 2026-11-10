@@ -90,6 +90,38 @@
   font-size: 13px;
 }
 
+.room-detail-heading,
+.outlet-detail-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.room-detail-heading h3,
+.outlet-detail-footer > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.delete-data-button {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--error);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.delete-data-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .room-detail ul {
   padding: 0;
   list-style: none;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase'
-import { createRoom, createOutlet, fetchBuildings } from './services/buildings'
+import { createRoom, createOutlet, deleteRoom, deleteOutlet, fetchBuildings } from './services/buildings'
 import { fetchRoomPhotos, uploadRoomPhotos } from './services/RoomPhotos.js'
 import { isUniversityEmail } from './utils/universityEmail'
 import { readRedirectIntent, clearRedirectIntent } from './utils/authRedirect'
@@ -48,6 +48,8 @@ function App() {
   const [photoProgress, setPhotoProgress] = useState(null)
   const [roomPhotosVersion, setRoomPhotosVersion] = useState(0)
   const photoUploadLock = useRef(false)
+  const deletionLock = useRef(false)
+  const [deletingItem, setDeletingItem] = useState(null)
 
   const { profile, status: profileStatus, reloadProfile } = useAccount(user)
   const hasUniversityEmail = isUniversityEmail(user?.email)
@@ -270,7 +272,7 @@ function App() {
       setErrorMessage('教室を確認できませんでした。画面を再読み込みしてください。')
       return
     }
-    if (photoUploadLock.current) return
+    if (photoUploadLock.current || deletionLock.current) return
     photoUploadLock.current = true
 
     setUploadingRoomId(roomId)
@@ -288,6 +290,45 @@ function App() {
       photoUploadLock.current = false
       setPhotoProgress(null)
       setUploadingRoomId(null)
+    }
+  }
+
+  async function handleDelete(type, item) {
+    if (deletionLock.current || photoUploadLock.current || !selectedBuilding) return
+    if (!user || item.user_id !== user.id) {
+      setErrorMessage('自分が追加したデータだけ削除できます。ログイン状態を確認してください。')
+      return
+    }
+    const message = type === 'room'
+      ? `「${item.name}」を削除しますか？\nこの教室に自分が追加したコンセント・写真・レビューも削除されます。元には戻せません。\nほかの人の投稿や投稿者不明のデータがある場合は削除できません。`
+      : `「${item.location_detail}」のコンセントを削除しますか？\n元には戻せません。`
+    if (!window.confirm(message)) return
+
+    const buildingId = selectedBuilding.id
+    deletionLock.current = true
+    setDeletingItem({ type, id: item.id })
+    setErrorMessage('')
+    try {
+      const result = await (type === 'room' ? deleteRoom(item.id) : deleteOutlet(item.id))
+      // 確認できた削除だけを一覧へ反映する。再取得の失敗で削除済みデータを残さない。
+      setBuildings(current => current.map(building => building.id !== buildingId ? building : {
+        ...building,
+        rooms: type === 'room'
+          ? building.rooms.filter(room => room.id !== item.id)
+          : building.rooms.map(room => ({ ...room, outlets: room.outlets.filter(outlet => outlet.id !== item.id) })),
+      }))
+      if (type === 'room') {
+        setReviewOverviewVersion(version => version + 1)
+        setRoomPhotosVersion(version => version + 1)
+      }
+      if (result?.imageCleanupPending) {
+        setErrorMessage('教室と関連する投稿を削除しました。写真ファイルの回収は確認待ちです。')
+      }
+    } catch (error) {
+      setErrorMessage(error?.message || '削除できませんでした。通信状態とログイン状態を確認してください。')
+    } finally {
+      deletionLock.current = false
+      setDeletingItem(null)
     }
   }
 
@@ -337,9 +378,13 @@ function App() {
             reviewOverview={reviewOverview}
             roomPhotos={roomPhotos}
             canPost={canPost}
+            currentUserId={authReady ? user?.id : null}
+            deletingItem={deletingItem}
             uploadingRoomId={uploadingRoomId}
             photoProgress={photoProgress}
             onAddPhotos={handleAddRoomPhotos}
+            onDeleteRoom={room => handleDelete('room', room)}
+            onDeleteOutlet={outlet => handleDelete('outlet', outlet)}
             onShowReviews={roomId => {
               setSelectedRoomId(roomId)
               setIsFormOpen(false)
@@ -362,7 +407,10 @@ function App() {
       }
       return
     }
-    if (!isFormOpen) setSheetSnapIndex(2)
+    if (!isFormOpen) {
+      setSheetSnapIndex(2)
+      if (!selectedBuilding.rooms.length) setFormMode('room')
+    }
     setIsFormOpen(open => !open)
   }
 
@@ -372,7 +420,7 @@ function App() {
         <button
           type="button"
           className="add-button"
-          disabled={profileStatus === 'loading'}
+          disabled={profileStatus === 'loading' || deletingItem != null}
           onClick={handleToggleAdd}
         >
           {!hasUniversityEmail ? '追加できません' : profileStatus === 'loading' ? '確認中...' : needsNickname ? 'ニックネームを設定' : isFormOpen ? 'キャンセル' : '＋ 追加'}
