@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createReview } from '../../services/reviews'
 import { IMAGE_ACCEPT, processImage } from '../../utils/imageProcessor.js'
+import { demoAccount } from '../../demo/account.js'
 
 export default function ReviewForm({ roomId, canPost, onSubmitted }) {
   const [rating, setRating] = useState(0)
@@ -151,7 +152,7 @@ export default function ReviewForm({ roomId, canPost, onSubmitted }) {
         </div>
       )}
 
-      <p className="review-note">レビューは公開されます。個人情報は書き込まないでください。</p>
+      {!demoAccount.isActive() && <p className="review-note">レビューは公開されます。個人情報は書き込まないでください。</p>}
       {errorMessage && <p className="review-error" role="alert">{errorMessage}</p>}
       
       {/* disabled の判定から !comment.trim() を削除（星を選べば投稿可能） */}

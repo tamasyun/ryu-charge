@@ -1,3 +1,5 @@
+import { demoAccount } from '../../demo/account.js'
+
 export default function AddDataForm({ building, formMode, onFormModeChange, onSubmit, saving }) {
   return (
     <form className="add-form" onSubmit={onSubmit}>
@@ -34,7 +36,7 @@ export default function AddDataForm({ building, formMode, onFormModeChange, onSu
           <input id="outlet-ports" name="ac_ports" type="number" min="0" max="50" step="1" placeholder="例：2" />
         </>
       )}
-      <p className="form-note">* 必須項目。登録した情報は他の利用者にも公開されます。</p>
+      <p className="form-note">* 必須項目。{!demoAccount.isActive() && '登録した情報は他の利用者にも公開されます。'}</p>
       <button type="submit" className="save-button" disabled={saving}>
         {saving ? '保存中...' : '追加する'}
       </button>

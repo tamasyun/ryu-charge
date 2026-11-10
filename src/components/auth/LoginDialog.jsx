@@ -7,6 +7,7 @@ import { createPasskeyService, passkeyErrorMessage, supportsPasskeys } from '../
 import NicknameField from './NicknameField'
 import SecurityChallenge from './SecurityChallenge'
 import { isValidNickname } from '../../utils/nickname'
+import { DEMO_NOTICE, isDemoEmail } from '../../demo/account.js'
 import './LoginDialog.css'
 import './LoginDialogOtp.css'
 
@@ -18,7 +19,7 @@ const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? ''
 function readRememberedEmail() {
   try {
     const saved = window.localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? ''
-    return isUniversityEmail(saved) ? saved : ''
+    return isUniversityEmail(saved) || isDemoEmail(saved) ? saved : ''
   } catch {
     return ''
   }
@@ -76,6 +77,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   const resendRequestedRef = useRef(false)
   const resendSendingRef = useRef(false)
   const captchaPending = Boolean(turnstileSiteKey) && !captchaToken
+  const demoEmail = isDemoEmail(email)
 
   function resetCaptcha() {
     setCaptchaToken('')
@@ -107,6 +109,23 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
     const normalizedEmail = email.trim().toLowerCase()
     setErrorMessage('')
     setNotice('')
+
+    if (isDemoEmail(normalizedEmail)) {
+      if (mode !== 'login') {
+        setErrorMessage('このアドレスはデモ用です。「ログイン」からお進みください。')
+        return
+      }
+      setBusy(true)
+      try {
+        await account.signInDemo()
+        storeRememberedEmail(normalizedEmail, rememberEmail)
+        onClose()
+        window.alert(DEMO_NOTICE)
+      } catch (error) {
+        setErrorMessage(error.message)
+      } finally { setBusy(false) }
+      return
+    }
 
     if (!isUniversityEmail(normalizedEmail)) {
       setErrorMessage('琉球大学のメールアドレスのみ利用できます。')
@@ -175,16 +194,17 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   }
 
   async function handlePasskeyLogin() {
-    if (busy || !canSendWithCaptcha()) return
+    if (busy || (!demoEmail && !canSendWithCaptcha())) return
     setBusy(true)
     setErrorMessage('')
     setNotice('')
     const token = captchaToken
     setCaptchaToken('')
     try {
-      setKeepSignedIn(true)
-      await passkeys.signIn(token)
+      if (!demoEmail) setKeepSignedIn(true)
+      await passkeys.signIn(token, email)
       onClose()
+      if (demoEmail) window.alert(DEMO_NOTICE)
     } catch (error) {
       setErrorMessage(error?.code === 'captcha_failed'
         ? authErrorMessage(error, 'send', 'login') : passkeyErrorMessage(error))
@@ -309,13 +329,13 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
               />
               <span>メールアドレスを記憶する</span>
             </label>
-            {captcha}
-            <button type="submit" className="login-submit" disabled={busy || resendWait > 0 || captchaPending}>
-              {busy ? '送信中...' : resendWait > 0 ? `送信まで ${resendWait}秒` : '認証コードを送信'}
+            {!demoEmail && captcha}
+            <button type="submit" className="login-submit" disabled={busy || resendWait > 0 || (!demoEmail && captchaPending)}>
+              {busy ? '送信中...' : resendWait > 0 ? `送信まで ${resendWait}秒` : demoEmail && mode === 'login' ? 'ログイン' : '認証コードを送信'}
             </button>
             {mode === 'login' && <>
               <button type="button" className="auth-button" onClick={handlePasskeyLogin}
-                disabled={busy || captchaPending || !supportsPasskeys()}>
+                disabled={busy || (!demoEmail && captchaPending) || !supportsPasskeys()}>
                 パスキーでログイン
               </button>
               {!supportsPasskeys() && <p className="nickname-note">この環境ではパスキーを利用できません。メール認証をご利用ください。</p>}

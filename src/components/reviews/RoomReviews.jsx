@@ -65,7 +65,10 @@ export default function RoomReviews({ roomId, roomName, mode, canPost, authReady
                 : 'レビューを投稿'}
             </button>
           </div>
-          <ReviewList roomId={roomId} authorVersion={authorVersion} onDeleted={() => setHasReviewed(false)} />
+          <ReviewList roomId={roomId} authorVersion={authorVersion} onDeleted={() => {
+            setHasReviewed(false)
+            onSubmitted?.()
+          }} />
         </>
       )}
     </section>

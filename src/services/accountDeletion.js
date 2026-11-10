@@ -1,3 +1,5 @@
+import { demoAccount } from '../demo/account.js'
+
 export function createAccountDeletionService(client) {
   async function invoke(body) {
     const { data, error } = await client.functions.invoke('delete-account', { body })
@@ -11,13 +13,14 @@ export function createAccountDeletionService(client) {
     return data
   }
   return {
-    status: () => invoke({ action: 'status' }),
+    status: () => demoAccount.isActive() ? Promise.resolve({ pending: false }) : invoke({ action: 'status' }),
     verifyCode(code) {
       if (!/^\d{8}$/.test(code)) throw new Error('8桁の認証コードを入力してください。')
       return invoke({ action: 'verify', code })
     },
     remove(proof, confirmation) {
       if (!proof || confirmation !== '削除する') throw new Error('削除の最終確認を完了してください。')
+      if (demoAccount.isActive()) return Promise.resolve(demoAccount.removeAccount())
       return invoke({ action: 'delete', proof, confirmation })
     },
   }

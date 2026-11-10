@@ -9,9 +9,9 @@ const fixture = vi.hoisted(() => ({
   buildings: [{ id: 'building', name: '建物', rooms: [{ id: 'room', name: '教室', user_id: 'user-1', author_nickname: '旧名',
     outlets: [{ id: 'outlet', user_id: 'other', author_nickname: '他の投稿者' }] }] }],
 }))
-vi.mock('../src/lib/supabase', () => ({ supabase: { auth: {
+vi.mock('../src/lib/supabase', () => ({ appAuth: {
   onAuthStateChange(callback) { callback('INITIAL_SESSION', { user: fixture.user }); return { data: { subscription: { unsubscribe() {} } } } },
-} } }))
+} }))
 vi.mock('../src/services/buildings', () => ({ fetchBuildings: async () => fixture.buildings, createRoom: vi.fn(), createOutlet: vi.fn() }))
 vi.mock('../src/services/RoomPhotos.js', () => ({ fetchRoomPhotos: async () => fixture.photos, uploadRoomPhotos: vi.fn() }))
 vi.mock('../src/hooks/useMediaQuery', () => ({ useMediaQuery: () => false }))
@@ -49,7 +49,7 @@ it('username opens settings; saving updates header and equipment authors and ref
   expect(screen.getByText('更新名', { selector: 'span' })).toBeTruthy()
   expect(screen.getByText('他の投稿者')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'レビューを見る' }))
-  expect(screen.getByText('レビュー更新番号：1')).toBeTruthy()
+  expect(screen.getByText('レビュー更新番号：2')).toBeTruthy()
 })
 
 it('account deletion refreshes room photos even when the retained room IDs do not change', async () => {

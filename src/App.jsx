@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
-import { supabase } from './lib/supabase'
+import { appAuth } from './lib/supabase'
+import { demoAccount } from './demo/account.js'
 import { createRoom, createOutlet, fetchBuildings } from './services/buildings'
 import { fetchRoomPhotos, uploadRoomPhotos } from './services/RoomPhotos.js'
 import { isUniversityEmail } from './utils/universityEmail'
@@ -53,9 +54,11 @@ function App() {
   const [photoProgress, setPhotoProgress] = useState(null)
   const [roomPhotosVersion, setRoomPhotosVersion] = useState(0)
   const photoUploadLock = useRef(false)
+  const accountIdentityRef = useRef(null)
 
   const { profile, status: profileStatus, reloadProfile, updateProfile } = useAccount(user)
-  const hasUniversityEmail = isUniversityEmail(user?.email)
+  const isDemo = demoAccount.isUser(user)
+  const hasUniversityEmail = isUniversityEmail(user?.email) || isDemo
   const canPost = authReady && hasUniversityEmail && profileStatus === 'ready'
   const needsNickname = hasUniversityEmail && profileStatus === 'missing'
   const selectedBuilding =
@@ -92,7 +95,19 @@ function App() {
   }
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = appAuth.onAuthStateChange((event, session) => {
+      const nextId = session?.user?.id ?? null
+      if (accountIdentityRef.current !== nextId) {
+        accountIdentityRef.current = nextId
+        setBuildings([])
+        setRoomPhotos({})
+        setDetailView('details')
+        setIsFormOpen(false)
+        setIsAccountOpen(false)
+        setAuthorVersion(value => value + 1)
+        setReviewOverviewVersion(value => value + 1)
+        setRoomPhotosVersion(value => value + 1)
+      }
       setUser(session?.user ?? null)
       setAuthReady(true)
       if (event === 'SIGNED_IN') setIsLoginOpen(false)
@@ -137,7 +152,7 @@ function App() {
     setSigningOut(true)
     setErrorMessage('')
     try {
-      const { error } = await supabase.auth.signOut()
+      const { error } = await appAuth.signOut()
       if (error) throw error
       setIsLoginOpen(false)
       setLoginIntent(null)
@@ -149,7 +164,9 @@ function App() {
   }
 
   async function loadBuildings() {
-    setBuildings(await fetchBuildings())
+    const identity = accountIdentityRef.current
+    const data = await fetchBuildings()
+    if (identity === accountIdentityRef.current) setBuildings(data)
   }
 
   useEffect(() => {
@@ -163,8 +180,22 @@ function App() {
       }
     }
     initialize()
-    return () => { active = false }
-  }, [])
+    // デモも最新の公開情報を取り込み続け、端末内の追加だけを重ねる。
+    function refresh() {
+      if (document.visibilityState === 'hidden') return
+      initialize()
+      setAuthorVersion(value => value + 1)
+      setReviewOverviewVersion(value => value + 1)
+      setRoomPhotosVersion(value => value + 1)
+    }
+    const timer = isDemo ? window.setInterval(refresh, 60000) : null
+    if (isDemo) window.addEventListener('focus', refresh)
+    return () => {
+      active = false
+      if (timer) window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [user?.id, isDemo])
 
   // 選択中の建物に属する教室の写真URLを取得する。
   const selectedRoomIdsKey = selectedBuilding?.rooms.map(room => room.id).join('|') ?? ''
@@ -182,7 +213,7 @@ function App() {
       })
 
     return () => { active = false }
-  }, [selectedBuildingId, selectedRoomIdsKey, roomPhotosVersion])
+  }, [selectedBuildingId, selectedRoomIdsKey, roomPhotosVersion, user?.id])
 
   // 別タブで開く認証リンクでも、URLから操作を再開する。
   useEffect(() => {
@@ -351,7 +382,7 @@ function App() {
         {detailView !== 'details' && selectedRoom ? (
           <RoomReviews
             authorVersion={authorVersion}
-            key={selectedRoom.id}
+            key={`${user?.id ?? 'guest'}-${selectedRoom.id}`}
             roomId={selectedRoom.id}
             roomName={selectedRoom.name}
             mode={detailView}
