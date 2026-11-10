@@ -129,7 +129,9 @@
   cursor: pointer;
 }
 
-.auth-button:hover { background: var(--code-bg); }
+@media (hover: hover) {
+  .auth-button:enabled:hover { color: var(--map-action-text); }
+}
 
 .map-layout,
 .map-area {
