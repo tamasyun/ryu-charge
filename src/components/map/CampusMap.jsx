@@ -9,6 +9,7 @@ const CAMPUS_CENTER = [26.2508, 127.7662]
 const CAMPUS_BOUNDS = latLngBounds([26.241, 127.756], [26.257, 127.776])
 const OVERVIEW_ZOOM = 16
 const INITIAL_ZOOM = 17
+const MAX_ZOOM = 19
 
 function focusMapAt(map, position, isMobile, zoom = map.getZoom()) {
   const { x: width, y: height } = map.getSize()
@@ -99,7 +100,8 @@ function MapLocation({ isMobile }) {
         <CircleMarker
           center={position}
           radius={7}
-          pathOptions={{ color: '#fff', weight: 2, fillColor: '#0065cf', fillOpacity: 1, className: 'location-dot' }}
+          className="location-dot"
+          pathOptions={{ color: '#fff', weight: 2, fillColor: '#0065cf', fillOpacity: 1 }}
           interactive={false}
         />
       )}
@@ -121,7 +123,7 @@ export default function CampusMap({ buildings, selectedBuilding, isMobile, overv
         center={isMobile ? [26.2499, 127.7662] : [26.2508, 127.7651]}
         zoom={INITIAL_ZOOM}
         minZoom={OVERVIEW_ZOOM}
-        maxZoom={18}
+        maxZoom={MAX_ZOOM}
         maxBounds={CAMPUS_BOUNDS}
         maxBoundsViscosity={1}
         bounceAtZoomLimits={false}
@@ -129,6 +131,7 @@ export default function CampusMap({ buildings, selectedBuilding, isMobile, overv
       >
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={MAX_ZOOM}
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
         />
         <ZoomControl position="bottomright" zoomInTitle="地図を拡大" zoomOutTitle="地図を縮小" />
