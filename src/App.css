@@ -7,6 +7,7 @@
   --map-blue: #0065cf;
   --map-action-text: #0065cf;
   --map-shadow: 0 1px 2px rgb(19 26 44 / 13%), 0 4px 15px rgb(19 26 44 / 8%);
+  --panel-radius: 23px;
   --panel-title-line: #c5c9d2;
   --panel-building-line: #d8dbe2;
   --panel-room-line: #e6e6ea;
@@ -145,7 +146,7 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--panel-building-line);
-  border-radius: 23px;
+  border-radius: var(--panel-radius);
   background: var(--bg);
   color: var(--text-h);
   box-shadow: var(--map-shadow);
