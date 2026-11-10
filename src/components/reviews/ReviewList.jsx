@@ -1,3 +1,4 @@
+import PhotoViewer from '../photos/PhotoViewer'
 import { useEffect, useState } from 'react'
 import { fetchReviews, deleteReview } from '../../services/reviews'
 import { supabase } from '../../lib/supabase'
@@ -35,9 +36,10 @@ export default function ReviewList({ roomId, onDeleted, authorVersion }) {
     if (!window.confirm('このレビューを削除しますか？')) return
 
     try {
-      await deleteReview(reviewId)
+      const result = await deleteReview(reviewId)
       setRevision(value => value + 1)
       onDeleted?.() // 親コンポーネントに削除を通知してボタンを復活させる
+      if (result?.imageCleanupPending) alert('レビューを削除しました。写真ファイルの回収は確認待ちです。')
     } catch (error) {
       alert('削除に失敗しました: ' + (error?.message || 'エラー'))
     }
@@ -91,20 +93,12 @@ export default function ReviewList({ roomId, onDeleted, authorVersion }) {
           {/* 写真があれば表示 */}
           {review.image_url && (
             <div style={{ marginTop: '8px' }}>
-              <a href={review.image_url} target="_blank" rel="noopener noreferrer">
-                <img
-                  src={review.image_url}
-                  alt="レビュー写真"
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '180px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                    objectFit: 'cover',
-                    display: 'block'
-                  }}
-                />
-              </a>
+              <PhotoViewer
+                src={review.image_url}
+                alt="レビュー写真"
+                className="review-photo-trigger"
+                imageClassName="review-photo-thumbnail"
+              />
             </div>
           )}
         </article>

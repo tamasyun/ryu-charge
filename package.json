@@ -8,21 +8,28 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "node --test tests/*.test.mjs && npm run test:ui",
-    "test:ui": "vitest run tests/*.test.jsx",
-    "preview": "vite preview"
+    "audit:photos": "node scripts/audit-photo-storage.mjs",
+    "check:migrations": "node scripts/check-migration-history.mjs",
+    "preview": "vite preview",
+    "test:ui": "vitest run tests/*.test.jsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@jsquash/webp": "1.5.0",
     "@marsidev/react-turnstile": "^1.6.3",
     "@supabase/supabase-js": "^2.117.3",
+    "exifreader": "4.54.0",
+    "heic-to": "1.6.7",
+    "image-size": "2.0.4",
     "leaflet": "^1.9.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.15",
+    "@electric-sql/pglite": "0.5.15",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.65.0",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",

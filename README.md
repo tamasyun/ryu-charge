@@ -114,5 +114,5 @@ http://localhost:5173/
 | `npm run build` | 本番環境向けにビルド |
 | `npm run preview` | ビルド結果をローカルで確認 |
 | `npm run lint` | ESLintでコードをチェック |
-| `npm test` | 認証モード・ニックネーム保存・認証状態の保持・CAPTCHAの画面動作をテスト |
+| `npm test` | 認証・アカウント設定・画像変換・写真投稿のフォームと失敗時の処理をテスト |
 | `npm run test:ui` | CAPTCHAを含む認証画面をテスト（外部サービスはモック） |

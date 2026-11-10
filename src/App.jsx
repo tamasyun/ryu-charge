@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase'
 import { createRoom, createOutlet, fetchBuildings } from './services/buildings'
+import { fetchRoomPhotos, uploadRoomPhotos } from './services/RoomPhotos.js'
 import { isUniversityEmail } from './utils/universityEmail'
 import { readRedirectIntent, clearRedirectIntent } from './utils/authRedirect'
 import { useMediaQuery } from './hooks/useMediaQuery'
@@ -47,6 +48,11 @@ function App() {
   const [accountNotice, setAccountNotice] = useState('')
   const [authorVersion, setAuthorVersion] = useState(0)
   const accountReturnFocusRef = useRef(null)
+  const [roomPhotos, setRoomPhotos] = useState({})
+  const [uploadingRoomId, setUploadingRoomId] = useState(null)
+  const [photoProgress, setPhotoProgress] = useState(null)
+  const [roomPhotosVersion, setRoomPhotosVersion] = useState(0)
+  const photoUploadLock = useRef(false)
 
   const { profile, status: profileStatus, reloadProfile, updateProfile } = useAccount(user)
   const hasUniversityEmail = isUniversityEmail(user?.email)
@@ -120,6 +126,7 @@ function App() {
     setAccountNotice(confirmed ? 'アカウントを削除しました。' : 'セッションが無効になりました。再ログインして削除状態を確認してください。')
     setAuthorVersion(value => value + 1)
     setReviewOverviewVersion(value => value + 1)
+    setRoomPhotosVersion(value => value + 1)
     loadBuildings().catch(() => setErrorMessage('設備情報を再取得できませんでした。ページを再読み込みしてください。'))
   }
 
@@ -156,6 +163,24 @@ function App() {
     initialize()
     return () => { active = false }
   }, [])
+
+  // 選択中の建物に属する教室の写真URLを取得する。
+  const selectedRoomIdsKey = selectedBuilding?.rooms.map(room => room.id).join('|') ?? ''
+  useEffect(() => {
+    let active = true
+    const roomIds = selectedRoomIdsKey ? selectedRoomIdsKey.split('|') : []
+    fetchRoomPhotos(roomIds)
+      .then(photosByRoom => {
+        if (active) setRoomPhotos(photosByRoom)
+      })
+      .catch(error => {
+        if (active) {
+          setErrorMessage(error instanceof Error ? error.message : '教室の写真を取得できませんでした。')
+        }
+      })
+
+    return () => { active = false }
+  }, [selectedBuildingId, selectedRoomIdsKey, roomPhotosVersion])
 
   // 別タブで開く認証リンクでも、URLから操作を再開する。
   useEffect(() => {
@@ -273,6 +298,36 @@ function App() {
     }
   }
 
+  async function handleAddRoomPhotos(roomId, files) {
+    if (!canPost) {
+      setErrorMessage('写真を追加するには琉球大学の大学メールでログインしてください。')
+      return
+    }
+    if (!selectedBuilding?.rooms.some(room => room.id === roomId)) {
+      setErrorMessage('教室を確認できませんでした。画面を再読み込みしてください。')
+      return
+    }
+    if (photoUploadLock.current) return
+    photoUploadLock.current = true
+
+    setUploadingRoomId(roomId)
+    setErrorMessage('')
+    try {
+      const uploadedPhotos = await uploadRoomPhotos(roomId, files, setPhotoProgress)
+      setRoomPhotosVersion(version => version + 1)
+      setRoomPhotos(current => ({
+        ...current,
+        [roomId]: [...(current[roomId] ?? []), ...uploadedPhotos],
+      }))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '写真を追加できませんでした。')
+    } finally {
+      photoUploadLock.current = false
+      setPhotoProgress(null)
+      setUploadingRoomId(null)
+    }
+  }
+
   function renderDetailBody() {
     return (
       <>
@@ -318,6 +373,11 @@ function App() {
           <BuildingRooms
             building={selectedBuilding}
             reviewOverview={reviewOverview}
+            roomPhotos={roomPhotos}
+            canPost={canPost}
+            uploadingRoomId={uploadingRoomId}
+            photoProgress={photoProgress}
+            onAddPhotos={handleAddRoomPhotos}
             onShowReviews={roomId => {
               setSelectedRoomId(roomId)
               setIsFormOpen(false)

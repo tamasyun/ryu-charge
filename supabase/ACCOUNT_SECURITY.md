@@ -4,7 +4,9 @@
 
 ## 1. DBの追加設定
 
-既存の `20261105164718_add_nickname_profiles_and_authorship.sql` 適用済みのDBを前提とします。現在のテーブル・外部キー・ポリシーを確認してバックアップし、`migrations/20261106055819_account_security_and_deletion.sql` を適用します。Supabase DashboardのSQL Editorで内容を確認して実行するか、利用中のCLIバージョンのヘルプに従って適用してください。
+既存の `20261105164718_add_nickname_profiles_and_authorship.sql` 適用済みのDBを前提とします。アカウント設定用SQLは、`main` にある `migrations/20261106190542_account_security_and_deletion_feat_auth_security.sql` に統一しています。以前のブランチにあった `20261106055819_account_security_and_deletion.sql` は同じ内容のため、二重適用を防ぐために削除しました。
+
+対象DBの適用履歴を確認し、すでに適用済みなら再実行しないでください。未適用の環境では、現在のテーブル・外部キー・ポリシーとバックアップを確認し、承認された段階で適用してください。後続の `20261106191546_allow_account_deletion_service_review_image_lookup.sql` と `20261106191625_photo_storage_owner_select_for_delete_many_20261107.sql` も、アカウント削除時のレビュー画像の参照・Storage APIによる回収に必要です。
 
 追加する内容：
 

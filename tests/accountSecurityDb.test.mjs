@@ -10,7 +10,7 @@ test('account security SQL: RLS, once-only enrollment, deletion retries and casc
       for (const file of [
         'tests/fixtures/account-security-bootstrap.sql',
         'supabase/migrations/20261105164718_add_nickname_profiles_and_authorship.sql',
-        'supabase/migrations/20261106055819_account_security_and_deletion.sql',
+        'supabase/migrations/20261106190542_account_security_and_deletion_feat_auth_security.sql',
         'tests/fixtures/account-security-assertions.sql',
       ]) {
         try { await db.exec(await readFile(file, 'utf8')) } catch (error) {

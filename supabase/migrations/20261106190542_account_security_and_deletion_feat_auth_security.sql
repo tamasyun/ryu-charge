@@ -1,5 +1,5 @@
 -- 未適用。既存のニックネーム・投稿者マイグレーションの後で実行する。
-BEGIN;
+
 CREATE SCHEMA IF NOT EXISTS account_private;
 REVOKE ALL ON SCHEMA account_private FROM public, anon, authenticated;
 
@@ -178,4 +178,3 @@ GRANT EXECUTE ON FUNCTION public.issue_account_deletion_proof(uuid,text), public
   public.prepare_account_deletion(uuid,text,jsonb), public.release_account_deletion_lease(uuid) TO service_role;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA account_private FROM public, anon, authenticated;
 CREATE INDEX IF NOT EXISTS room_reviews_user_id_idx ON public.room_reviews(user_id);
-COMMIT;
