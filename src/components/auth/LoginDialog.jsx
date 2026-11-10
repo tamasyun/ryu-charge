@@ -7,7 +7,7 @@ import { createPasskeyService, passkeyErrorMessage, supportsPasskeys } from '../
 import NicknameField from './NicknameField'
 import SecurityChallenge from './SecurityChallenge'
 import { isValidNickname } from '../../utils/nickname'
-import { DEMO_NOTICE, isDemoEmail } from '../../demo/account.js'
+import { DEMO_NOTICE, isDemoEmail, demoAccount } from '../../demo/account.js'
 import './LoginDialog.css'
 import './LoginDialogOtp.css'
 
@@ -78,6 +78,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   const resendSendingRef = useRef(false)
   const captchaPending = Boolean(turnstileSiteKey) && !captchaToken
   const demoEmail = isDemoEmail(email)
+  const demoPasskeyLogin = demoAccount.shouldUsePasskey(email)
 
   function resetCaptcha() {
     setCaptchaToken('')
@@ -102,6 +103,19 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
     return () => window.clearTimeout(timer)
   }, [resendWait])
 
+  async function registerInitialPasskey(user) {
+    try {
+      await account.registerInitialPasskey(user)
+      return ''
+    } catch {
+      const message = demoAccount.isUser(user)
+        ? 'デモアカウントにはログインできましたが、パスキーの登録は完了していません。アカウント設定の「パスキー管理」から登録してください。'
+        : 'ログインは完了しています。パスキーはアカウント設定から登録できます。'
+      if (!demoAccount.isUser(user)) onPasskeyNotice?.(message)
+      return message
+    }
+  }
+
   async function handleSend(event) {
     event.preventDefault()
     if (busy || resendWait > 0) return
@@ -117,10 +131,11 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
       }
       setBusy(true)
       try {
-        await account.signInDemo()
+        const data = account.signInDemo()
         storeRememberedEmail(normalizedEmail, rememberEmail)
         onClose()
-        window.alert(DEMO_NOTICE)
+        const passkeyNotice = await registerInitialPasskey(data.user)
+        window.alert(passkeyNotice ? `${DEMO_NOTICE}\n\n${passkeyNotice}` : DEMO_NOTICE)
       } catch (error) {
         setErrorMessage(error.message)
       } finally { setBusy(false) }
@@ -180,11 +195,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
       // 認証後の追加・レビュー画面の復元はApp.jsxで行う。
       onClose()
       if (sentRequest.mode === 'signup' && data?.user) {
-        try {
-          await account.registerInitialPasskey(data.user)
-        } catch {
-          onPasskeyNotice?.('ログインは完了しています。パスキーはアカウント設定から登録できます。')
-        }
+        await registerInitialPasskey(data.user)
       }
     } catch (error) {
       setErrorMessage(authErrorMessage(error, 'verify'))
@@ -194,17 +205,17 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   }
 
   async function handlePasskeyLogin() {
-    if (busy || (!demoEmail && !canSendWithCaptcha())) return
+    if (busy || (!demoPasskeyLogin && !canSendWithCaptcha())) return
     setBusy(true)
     setErrorMessage('')
     setNotice('')
     const token = captchaToken
     setCaptchaToken('')
     try {
-      if (!demoEmail) setKeepSignedIn(true)
+      if (!demoPasskeyLogin) setKeepSignedIn(true)
       await passkeys.signIn(token, email)
       onClose()
-      if (demoEmail) window.alert(DEMO_NOTICE)
+      if (demoPasskeyLogin) window.alert(DEMO_NOTICE)
     } catch (error) {
       setErrorMessage(error?.code === 'captcha_failed'
         ? authErrorMessage(error, 'send', 'login') : passkeyErrorMessage(error))
@@ -329,13 +340,13 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
               />
               <span>メールアドレスを記憶する</span>
             </label>
-            {!demoEmail && captcha}
+            {!demoEmail && !demoPasskeyLogin && captcha}
             <button type="submit" className="login-submit" disabled={busy || resendWait > 0 || (!demoEmail && captchaPending)}>
               {busy ? '送信中...' : resendWait > 0 ? `送信まで ${resendWait}秒` : demoEmail && mode === 'login' ? 'ログイン' : '認証コードを送信'}
             </button>
             {mode === 'login' && <>
               <button type="button" className="auth-button" onClick={handlePasskeyLogin}
-                disabled={busy || (!demoEmail && captchaPending) || !supportsPasskeys()}>
+                disabled={busy || (!demoPasskeyLogin && captchaPending) || !supportsPasskeys()}>
                 パスキーでログイン
               </button>
               {!supportsPasskeys() && <p className="nickname-note">この環境ではパスキーを利用できません。メール認証をご利用ください。</p>}

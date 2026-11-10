@@ -1,5 +1,5 @@
 import { isUniversityEmail } from '../utils/universityEmail.js'
-import { demoAccount, isDemoEmail } from '../demo/account.js'
+import { demoAccount } from '../demo/account.js'
 import { demoPasskeys } from '../demo/passkeys.js'
 
 export function supportsPasskeys() {
@@ -9,6 +9,7 @@ export function supportsPasskeys() {
 }
 
 export function passkeyErrorMessage(error) {
+  if (error?.code === 'DEMO_PASSKEY_NOT_REGISTERED') return error.message
   if (['NotAllowedError', 'AbortError'].includes(error?.name) ||
       ['ERROR_CEREMONY_ABORTED', 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY', 'ERROR_NOT_ALLOWED'].includes(error?.code)) {
     return 'パスキー操作を完了できませんでした。キャンセルした場合や端末の確認画面が開かない場合は、もう一度ボタンからお試しください。'
@@ -19,7 +20,7 @@ export function passkeyErrorMessage(error) {
 export function createPasskeyService(client) {
   return {
     async signIn(captchaToken, email) {
-      if (isDemoEmail(email)) return demoPasskeys.signIn()
+      if (demoAccount.shouldUsePasskey(email)) return demoPasskeys.signIn()
       const { data, error } = await client.auth.signInWithPasskey({
         options: captchaToken ? { captchaToken } : {},
       })

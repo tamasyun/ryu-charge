@@ -14,10 +14,26 @@ before(async () => {
 })
 after(async () => { await server?.close() })
 
-async function setup(browser, viewport) {
+async function setup(browser, viewport, { registerOnFirstLogin = false } = {}) {
   const context = await browser.newContext({ viewport })
   const page = await context.newPage()
   page.setDefaultTimeout(12000)
+  let cdp, authenticatorId
+  if (registerOnFirstLogin) {
+    cdp = await context.newCDPSession(page)
+    await cdp.send('WebAuthn.enable')
+    ;({ authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', { options: {
+      protocol: 'ctap2', transport: 'internal', hasResidentKey: true,
+      hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true,
+    } }))
+  } else {
+    await context.addInitScript(() => {
+      if (!navigator.credentials) return
+      const create = navigator.credentials.create.bind(navigator.credentials)
+      navigator.credentials.create = async () => { throw new DOMException('cancelled', 'NotAllowedError') }
+      window.restoreDemoCredentials = () => { navigator.credentials.create = create }
+    })
+  }
   const writes = [], reads = [], notices = [], errors = []
   const buildings = [{ id: 'b1', name: 'テスト棟', latitude: 26.248, longitude: 127.766,
     rooms: [{ id: 'r1', name: '公開教室', floor: 1, location_detail: '公開の場所', outlets: [], user_id: null }] }]
@@ -41,12 +57,82 @@ async function setup(browser, viewport) {
   await page.getByRole('button', { name: 'ログイン', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'ログイン', exact: true })
   await dialog.getByLabel('大学のメールアドレス').fill('demo@example.com')
+  const initialNotice = page.waitForEvent('dialog')
   await dialog.locator('form').getByRole('button', { name: 'ログイン', exact: true }).click()
   await page.getByRole('button', { name: 'デモアカウントのアカウント設定' }).waitFor().catch(async error => {
     throw new Error(JSON.stringify({ body: await page.locator('body').innerText(), errors, notices, writes }), { cause: error })
   })
-  return { context, page, writes, reads, notices, errors, buildings }
+  await initialNotice
+  return { context, page, writes, reads, notices, errors, buildings, cdp, authenticatorId }
 }
+
+test('first browser login automatically registers a working passkey; reload and later login do not repeat enrollment', async () => {
+  const browser = await chromium.launch()
+  try {
+    const f = await setup(browser, { width: 1280, height: 850 }, { registerOnFirstLogin: true })
+    const { page, cdp, authenticatorId } = f
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ryu-charge:demo:v1')))
+    assert.equal(stored.passkeys.length, 1)
+    assert.equal(stored.initialPasskeyEnrollmentClaimed, true)
+    await page.reload()
+    await page.getByRole('button', { name: 'デモアカウントのアカウント設定' }).waitFor()
+    await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
+    await page.getByRole('button', { name: 'ログイン', exact: true }).click()
+    const login = page.getByRole('dialog', { name: 'ログイン', exact: true })
+    assert.equal(await login.getByLabel('大学のメールアドレス').inputValue(), '')
+    await login.getByRole('button', { name: 'パスキーでログイン', exact: true }).click()
+    await page.getByRole('button', { name: 'デモアカウントのアカウント設定' }).waitFor()
+    assert.equal((await cdp.send('WebAuthn.getCredentials', { authenticatorId })).credentials.length, 1)
+    assert.deepEqual(f.writes, [])
+    assert.deepEqual(f.errors, [])
+    await f.context.close()
+  } finally { await browser.close() }
+})
+
+test('blank-email login explains when first demo passkey registration did not complete', async () => {
+  const browser = await chromium.launch()
+  try {
+    const f = await setup(browser, { width: 390, height: 844 })
+    assert.match(f.notices[0], /パスキーの登録は完了していません/)
+    await f.page.getByRole('button', { name: 'ログアウト', exact: true }).click()
+    await f.page.getByRole('button', { name: 'ログイン', exact: true }).click()
+    const login = f.page.getByRole('dialog', { name: 'ログイン', exact: true })
+    assert.equal(await login.getByLabel('大学のメールアドレス').inputValue(), '')
+    await login.getByRole('button', { name: 'パスキーでログイン', exact: true }).click()
+    await login.getByRole('alert').getByText(/このブラウザにはデモ用パスキーが登録されていません/).waitFor()
+    assert.deepEqual(f.writes, [])
+    await f.context.close()
+  } finally { await browser.close() }
+})
+
+test('an existing demo account without a passkey gets one registration offer', async () => {
+  const browser = await chromium.launch()
+  try {
+    const f = await setup(browser, { width: 390, height: 844 })
+    await f.page.evaluate(() => {
+      const key = 'ryu-charge:demo:v1'
+      const data = JSON.parse(localStorage.getItem(key))
+      delete data.initialPasskeyEnrollmentClaimed
+      localStorage.setItem(key, JSON.stringify(data))
+      window.restoreDemoCredentials?.()
+    })
+    const cdp = await f.context.newCDPSession(f.page)
+    await cdp.send('WebAuthn.enable')
+    await cdp.send('WebAuthn.addVirtualAuthenticator', { options: {
+      protocol: 'ctap2', transport: 'internal', hasResidentKey: true,
+      hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true,
+    } })
+    await f.page.getByRole('button', { name: 'ログアウト', exact: true }).click()
+    await f.page.getByRole('button', { name: 'ログイン', exact: true }).click()
+    const login = f.page.getByRole('dialog', { name: 'ログイン', exact: true })
+    await login.getByLabel('大学のメールアドレス').fill('demo@example.com')
+    await login.locator('form').getByRole('button', { name: 'ログイン', exact: true }).click()
+    await f.page.getByRole('button', { name: 'デモアカウントのアカウント設定' }).waitFor()
+    assert.equal(await f.page.evaluate(() => JSON.parse(localStorage.getItem('ryu-charge:demo:v1')).passkeys.length), 1)
+    assert.deepEqual(f.writes, [])
+    await f.context.close()
+  } finally { await browser.close() }
+})
 
 test('shared desktop app: local posting, fresh public data, photos, WebAuthn registration/sign-in and normal logout', async () => {
   const browser = await chromium.launch()
@@ -97,6 +183,7 @@ test('shared desktop app: local posting, fresh public data, photos, WebAuthn reg
     await page.getByRole('button', { name: '公開教室のコンセント・教室の写真を全画面表示' }).waitFor()
 
     const cdp = await page.context().newCDPSession(page)
+    await page.evaluate(() => window.restoreDemoCredentials?.())
     await cdp.send('WebAuthn.enable')
     await cdp.send('WebAuthn.addVirtualAuthenticator', { options: {
       protocol: 'ctap2', transport: 'internal', hasResidentKey: true,

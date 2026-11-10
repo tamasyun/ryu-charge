@@ -2,6 +2,7 @@ export const DEMO_EMAIL = 'demo@example.com'
 export const DEMO_NOTICE = 'デモアカウントでログインしました。追加・変更はこのブラウザ内だけに保存され、公開データには反映されません。ブラウザのデータを消すと利用できなくなります。'
 export const DEMO_STORAGE_KEY = 'ryu-charge:demo:v1'
 const SESSION_KEY = 'ryu-charge:demo-session:v1'
+const LAST_ACCOUNT_KEY = 'ryu-charge:last-account-kind'
 
 export function isDemoEmail(email) {
   return typeof email === 'string' && email.trim().toLowerCase() === DEMO_EMAIL
@@ -38,6 +39,10 @@ export function createDemoAccount({
     try { return session().getItem(SESSION_KEY) === 'active' } catch { return false }
   }
 
+  function rememberAccountKind(kind) {
+    try { storage().setItem(LAST_ACCOUNT_KEY, kind) } catch { /* ログイン自体は継続する。 */ }
+  }
+
   function requireActive() {
     if (!isActive()) throw new Error('デモアカウントにログインしてください。')
     const data = read()
@@ -53,6 +58,15 @@ export function createDemoAccount({
   const api = {
     isActive,
     read,
+    shouldUsePasskey(email = '') {
+      if (isDemoEmail(email)) return true
+      if (typeof email !== 'string' || email.trim()) return false
+      try {
+        // 登録に失敗した場合もデモ側で理由を表示し、通常の認証へ誤って送らない。
+        return storage().getItem(LAST_ACCOUNT_KEY) === 'demo' && Boolean(storage().getItem(DEMO_STORAGE_KEY))
+      } catch { return false }
+    },
+    rememberRealSignIn() { rememberAccountKind('real') },
     // 画像処理・パスキー操作中のログアウトやアカウント切替を検出する。
     capture() {
       const { userId } = requireActive()
@@ -79,10 +93,19 @@ export function createDemoAccount({
       return Boolean(isActive() && user?.app_metadata?.provider === 'browser-demo' && user.id === read()?.userId)
     },
     signIn() {
-      if (!read()) write({ version: 1, userId: uuid(), nickname: 'デモアカウント', rooms: [], outlets: [], reviews: [], photos: [], passkeys: [] })
+      const isNewAccount = !read()
+      if (isNewAccount) write({ version: 1, userId: uuid(), nickname: 'デモアカウント', rooms: [], outlets: [], reviews: [], photos: [], passkeys: [], initialPasskeyEnrollmentClaimed: false })
       session().setItem(SESSION_KEY, 'active')
+      rememberAccountKind('demo')
       emit('SIGNED_IN')
-      return { user: api.getUser() }
+      return { user: api.getUser(), isNewAccount }
+    },
+    claimInitialPasskeyEnrollment() {
+      const data = requireActive()
+      // 旧デモデータにも一度だけ登録を案内する。失敗時の再登録は設定から行う。
+      if (data.initialPasskeyEnrollmentClaimed === true || data.passkeys.length) return false
+      write({ ...data, initialPasskeyEnrollmentClaimed: true })
+      return true
     },
     signOut() {
       session().removeItem(SESSION_KEY)

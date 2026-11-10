@@ -1,6 +1,7 @@
 import { isUniversityEmail } from '../utils/universityEmail.js'
 import { isValidNickname, normalizeNickname } from '../utils/nickname.js'
 import { demoAccount, isDemoEmail } from '../demo/account.js'
+import { demoPasskeys } from '../demo/passkeys.js'
 
 // クライアントを受け取り、ログインと新規登録で同じ送信・検証処理を使う。
 export function createAccountService(client) {
@@ -68,8 +69,12 @@ export function createAccountService(client) {
     },
 
     async registerInitialPasskey(user) {
-      if (demoAccount.isUser(user)) return false
-      // 呼び出し元は新規登録のOTP完了ハンドラーのみ。再読込・通常ログインでは呼ばない。
+      if (demoAccount.isUser(user)) {
+        if (!demoAccount.claimInitialPasskeyEnrollment()) return false
+        await demoPasskeys.register()
+        return true
+      }
+      // 新規登録の完了時だけ呼ぶ。再読込・通常ログインでは呼ばない。
       const profile = await this.loadProfile(user)
       if (!profile) return false
       const { data: claimed, error } = await client.rpc('claim_initial_passkey_enrollment')

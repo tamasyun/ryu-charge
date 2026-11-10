@@ -5,10 +5,12 @@ export function createAppAuth(auth, demo) {
       let realSession = null
       const unsubscribe = demo.subscribe(event => {
         const user = demo.getUser()
+        if (!user && realSession?.user) demo.rememberRealSignIn()
         callback(event, user ? { user } : realSession)
       })
       const { data: { subscription } } = auth.onAuthStateChange((event, session) => {
         realSession = session
+        if (session?.user && !demo.isActive()) demo.rememberRealSignIn()
         const user = demo.getUser()
         callback(user ? 'SIGNED_IN' : event, user ? { user } : session)
       })

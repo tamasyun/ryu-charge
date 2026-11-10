@@ -77,7 +77,11 @@ export function createDemoPasskeys(demo, {
     },
     async signIn() {
       const data = demo.read()
-      if (!data?.passkeys.length) throw new Error('先にデモアカウントの設定からパスキーを登録してください。')
+      if (!data?.passkeys.length) {
+        const error = new Error('このブラウザにはデモ用パスキーが登録されていません。demo@example.com でログインし、アカウント設定の「パスキー管理」から登録してください。')
+        error.code = 'DEMO_PASSKEY_NOT_REGISTERED'
+        throw error
+      }
       const nonce = challenge()
       const credential = await credentials().get({ publicKey: {
         challenge: nonce, rpId: location().hostname, userVerification: 'required', timeout: 60000,
