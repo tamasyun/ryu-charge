@@ -17,14 +17,14 @@ import LoginDialog from './components/auth/LoginDialog'
 import ProfileDialog from './components/auth/ProfileDialog'
 import AccountSettingsDialog from './components/auth/AccountSettingsDialog'
 
-// 小さい画面でもヘッダーと追加ボタンを同時に表示できる高さを確保する。
-const PORTRAIT_SNAP_POINTS = ['200px', 0.5, 0.85]
-const LANDSCAPE_SNAP_POINTS = ['200px', 0.7, 0.9]
+const PORTRAIT_SNAP_POINTS = ['220px', 0.5, 0.85]
+const LANDSCAPE_SNAP_POINTS = [0.45, 0.6, 0.8]
 
 function App() {
   const isMobile = useMediaQuery('(max-width: 760px)')
   const isLandscape = useMediaQuery('(orientation: landscape)')
-  const [sheetSnapIndex, setSheetSnapIndex] = useState(1)
+  const [sheetSnapIndex, setSheetSnapIndex] = useState(0)
+  const [overviewRequest, setOverviewRequest] = useState(0)
   const [buildings, setBuildings] = useState([])
   const [selectedBuildingId, setSelectedBuildingId] = useState(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -64,6 +64,8 @@ function App() {
     selectedBuilding?.rooms.find(room => room.id === selectedRoomId) ?? null
   const reviewOverview = useReviewOverview(selectedBuilding, reviewOverviewVersion)
   const sheetSnapPoints = isLandscape ? LANDSCAPE_SNAP_POINTS : PORTRAIT_SNAP_POINTS
+  const sheetSnap = sheetSnapPoints[sheetSnapIndex]
+  const sheetHeight = typeof sheetSnap === 'number' ? `${sheetSnap * 100}dvh` : sheetSnap
 
   function openLogin(intent = null, mode = 'login') {
     setAccountNotice('')
@@ -229,6 +231,13 @@ function App() {
     setIsFormOpen(false)
     setDetailView('details')
     setSelectedRoomId(null)
+    setSheetSnapIndex(0)
+  }
+
+  function showOverview() {
+    closeDetails()
+    setErrorMessage('')
+    setOverviewRequest(request => request + 1)
   }
 
   async function handleAdd(event) {
@@ -328,6 +337,14 @@ function App() {
     }
   }
 
+  function handleReviewLogin() {
+    if (user && !hasUniversityEmail) {
+      setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
+    } else if (selectedBuilding && selectedRoom) {
+      openLogin({ type: 'review', buildingId: selectedBuilding.id, roomId: selectedRoom.id })
+    }
+  }
+
   function renderDetailBody() {
     return (
       <>
@@ -345,13 +362,7 @@ function App() {
               setDetailView('write')
               setSheetSnapIndex(2)
             }}
-            onLogin={() => {
-              if (user && !hasUniversityEmail) {
-                setErrorMessage('大学メール以外のアカウントでは投稿できません。ログアウトしてください。')
-              } else {
-                openLogin({ type: 'review', buildingId: selectedBuilding.id, roomId: selectedRoom.id })
-              }
-            }}
+            onLogin={handleReviewLogin}
             onBack={() => {
               setDetailView('details')
               setSelectedRoomId(null)
@@ -422,7 +433,12 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>琉CHARGE</h1>
+        <h1>
+          <button type="button" className="brand-button" aria-label="琉CHARGE 地図全体に戻る" onClick={showOverview}>
+            <svg viewBox="0 0 24 26" aria-hidden="true"><path d="M14.8 1 4 14.7h7.1L8.9 25 20 11.1h-7.1Z" /></svg>
+            琉CHARGE
+          </button>
+        </h1>
         <div className="auth-header">
           {!authReady ? (
             <span className="auth-status">確認中...</span>
@@ -469,8 +485,6 @@ function App() {
         user={user} profile={profile} returnFocusRef={accountReturnFocusRef}
         onClose={() => setIsAccountOpen(false)} onSaved={handleNicknameSaved} onDeleted={handleAccountDeleted} />}
 
-      {accountNotice && <p role="status" className="app-account-notice">{accountNotice}</p>}
-
       {user && (
         <ProfileDialog
           key={user.id}
@@ -481,33 +495,49 @@ function App() {
         />
       )}
 
-      {user && profileStatus === 'error' && (
-        <p role="alert" className="app-error">プロフィールを取得・保存できませんでした。「再試行」を押してください。</p>
-      )}
+      <div className="app-messages">
+        {accountNotice && <p role="status" className="app-account-notice">{accountNotice}</p>}
+        {user && profileStatus === 'error' && (
+          <p role="alert" className="app-error">プロフィールを取得・保存できませんでした。「再試行」を押してください。</p>
+        )}
+        {errorMessage && <p role="alert" className="app-error">{errorMessage}</p>}
+      </div>
 
-      {errorMessage && <p role="alert" className="app-error">{errorMessage}</p>}
-
-      <main className={`map-layout ${selectedBuilding ? 'with-details' : ''}`}>
+      <main
+        className={`map-layout${sheetSnapIndex === 2 ? ' sheet-expanded' : ''}`}
+        style={isMobile ? { '--sheet-height': sheetHeight } : undefined}
+      >
         <CampusMap
           buildings={buildings}
           selectedBuilding={selectedBuilding}
           isMobile={isMobile}
+          overviewRequest={overviewRequest}
           onSelectBuilding={selectBuilding}
         />
 
-        {selectedBuilding && (
-          <BuildingDetailsPanel
-            building={selectedBuilding}
-            isMobile={isMobile}
-            snapPoints={sheetSnapPoints}
-            snapIndex={sheetSnapIndex}
-            onSnapIndexChange={setSheetSnapIndex}
-            onClose={closeDetails}
-            footer={renderDetailFooter()}
-          >
-            {renderDetailBody()}
-          </BuildingDetailsPanel>
-        )}
+        <BuildingDetailsPanel
+          building={selectedBuilding}
+          isMobile={isMobile}
+          snapPoints={sheetSnapPoints}
+          snapIndex={sheetSnapIndex}
+          onSnapIndexChange={setSheetSnapIndex}
+          onClose={closeDetails}
+          overviewRequest={overviewRequest}
+          footer={selectedBuilding && renderDetailFooter()}
+        >
+          {selectedBuilding ? renderDetailBody() : (
+            <ul className="building-list">
+              {buildings.map(building => (
+                <li key={building.id}>
+                  <button type="button" onClick={() => selectBuilding(building)}>
+                    {building.name}
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </BuildingDetailsPanel>
       </main>
     </div>
   )

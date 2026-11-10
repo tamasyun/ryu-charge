@@ -18,8 +18,8 @@
   font-size: 13px;
   cursor: pointer;
 }
-.review-link-content { display: flex; flex-direction: column; gap: 3px; }
-.review-link-overview { color: var(--text); font-size: 13px; }
+.review-link-content { display: flex; flex: 1; flex-wrap: wrap; justify-content: space-between; gap: 3px 10px; }
+.review-link-overview { color: var(--text); font-size: 12px; }
 /* 教室の区切りと重複しないよう、上罫線は付けない。 */
 .review-list-link {
   display: flex;
@@ -27,11 +27,11 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  margin-top: 14px;
-  padding: 14px 0 4px;
+  min-height: 44px;
+  padding: 7px 0;
   border: 0;
   background: transparent;
-  color: var(--text-h);
+  color: var(--map-action-text, var(--text-h));
   font: inherit;
   font-size: 13px;
   text-align: left;

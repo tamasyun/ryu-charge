@@ -1,3 +1,29 @@
+:root {
+  --map-edge: 22px;
+  --map-left: max(var(--map-edge), env(safe-area-inset-left));
+  --map-right: max(var(--map-edge), env(safe-area-inset-right));
+  --map-top: max(var(--map-edge), env(safe-area-inset-top));
+  --map-bottom: max(var(--map-edge), calc(env(safe-area-inset-bottom) + 8px));
+  --map-blue: #0065cf;
+  --map-action-text: #0065cf;
+  --map-shadow: 0 1px 2px rgb(19 26 44 / 13%), 0 4px 15px rgb(19 26 44 / 8%);
+  --panel-radius: 23px;
+  --panel-title-line: #c5c9d2;
+  --panel-building-line: #d8dbe2;
+  --panel-room-line: #e6e6ea;
+  --panel-outlet-line: #ededf1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --map-action-text: #81baff;
+    --map-shadow: 0 1px 2px rgb(0 0 0 / 25%), 0 4px 15px rgb(0 0 0 / 22%);
+    --panel-title-line: #73798a;
+    --panel-building-line: #585e6d;
+    --panel-room-line: #444754;
+    --panel-outlet-line: #353842;
+  }
+}
 
 #root {
   width: 100%;
@@ -6,149 +32,293 @@
 }
 
 .app {
+  position: relative;
   height: 100dvh;
-  display: flex;
-  flex-direction: column;
   text-align: left;
 }
 
 .app-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  position: absolute;
+  z-index: 3;
+  top: var(--map-top);
+  right: var(--map-right);
+  left: var(--map-left);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
 }
 
-/* 通常は地図のみ */
-.map-layout {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+.brand-button,
+.auth-header {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  border: 1px solid var(--panel-building-line);
+  background: var(--bg);
+  box-shadow: var(--map-shadow);
+  pointer-events: auto;
 }
 
-/* ピン選択時は右側に詳細を表示 */
-.map-layout.with-details {
-  grid-template-columns: minmax(0, 1fr) 360px;
+.brand-button {
+  gap: 8px;
+  padding: 9px 15px 9px 12px;
+  border-radius: 17px;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
 }
 
+.brand-button svg {
+  width: 23px;
+  height: 26px;
+  fill: var(--map-action-text);
+}
+
+.auth-header {
+  min-width: 0;
+  padding-inline: 5px;
+  border-radius: 999px;
+}
+
+.auth-nickname {
+  min-width: 0;
+  max-width: 220px;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-nickname,
+.auth-status {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.auth-restricted {
+  margin-left: 8px;
+  color: var(--error);
+  font-size: 12px;
+}
+
+.auth-status { padding-inline: 8px; }
+
+.auth-button {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .auth-button:enabled:hover { color: var(--map-action-text); }
+}
+
+.map-layout,
 .map-area {
-  min-width: 0;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
 }
 
-/* 詳細パネル */
+.map-area { z-index: 0; }
+
 .detail-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  overflow-y: auto;
-  padding: 20px;
-  border-left: 1px solid var(--border);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--panel-building-line);
+  border-radius: var(--panel-radius);
+  background: var(--bg);
+  color: var(--text-h);
+  box-shadow: var(--map-shadow);
+}
+
+.desktop-detail-panel {
+  position: absolute;
+  z-index: 1;
+  top: calc(var(--map-top) + 72px);
+  left: var(--map-left);
+  box-sizing: border-box;
+  width: min(364px, 40vw);
+  max-height: calc(100dvh - var(--map-top) - 72px - var(--map-bottom));
 }
 
 .detail-header {
   display: flex;
+  flex-shrink: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 24px;
+  padding: 18px 20px 15px;
+  border-bottom: 1px solid var(--panel-title-line);
 }
 
 .detail-header h2 {
-  margin: 0 0 6px;
-  font-size: 22px;
+  margin: 0;
+  font-size: 23px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .detail-header p {
-  font-size: 14px;
+  margin-top: 6px;
   color: var(--text);
+  font-size: 13px;
 }
 
 .close-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -6px -6px 0 0;
+  padding: 6px;
   border: 0;
-  background: transparent;
-  color: var(--text-h);
-  font-size: 28px;
+  border-radius: 50%;
+  background: var(--code-bg);
+  background-clip: content-box;
+  color: var(--text);
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
   cursor: pointer;
 }
 
-/* 教室の区切りをコンセントの枠より強くする。 */
-.room-detail {
-  padding: 16px 0;
-  border-top: 2px solid var(--section-border);
+.detail-content {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px;
+  overscroll-behavior: contain;
+}
+
+.detail-content:has(> :not(.building-list, .room-detail)) {
+  padding-block: 16px;
+}
+
+.building-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.building-list li + li { border-top: 1px solid var(--panel-building-line); }
+
+.building-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.building-list button:hover { color: var(--map-action-text); }
+
+.building-list svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 建物名、建物同士、教室、コンセントの順に線を薄くする。 */
+.room-detail { padding: 16px 0 12px; }
+
+.room-detail + .room-detail {
+  padding-top: 20px;
+  border-top: 1px solid var(--panel-room-line);
 }
 
 .room-detail h3 {
-  margin: 0 0 8px;
-  font-size: 17px;
+  margin: 0 0 2px;
+  font-size: 16px;
   color: var(--text-h);
+  overflow-wrap: anywhere;
 }
 
 .room-detail p {
+  color: var(--text);
   font-size: 13px;
 }
 
 .room-detail ul {
+  margin: 10px 0 0;
   padding: 0;
+  border-top: 1px solid var(--panel-outlet-line);
   list-style: none;
 }
 
 .room-detail li {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  margin-bottom: 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--panel-outlet-line);
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
+
+.room-detail li > div { margin-left: auto; }
 
 .room-detail li span {
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
 }
 
-/* 詳細パネルをヘッダー・本文・フッターに分割 */
-.detail-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-.detail-header {
-  flex-shrink: 0;
-  margin-bottom: 0;
-  padding: 20px;
-  border-bottom: 1px solid var(--border);
-}
-
-.detail-content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-/* 右下の追加ボタン */
 .detail-footer {
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  border-top: 1px solid var(--panel-room-line);
 }
 
 .add-button,
 .save-button {
-  padding: 10px 16px;
+  min-height: 40px;
+  padding: 8px 15px;
   border: none;
-  border-radius: 6px;
-  background: #2563eb;
+  border-radius: 999px;
+  background: var(--map-blue);
   color: white;
   font: inherit;
   font-size: 14px;
@@ -157,7 +327,7 @@
 
 .add-button:hover,
 .save-button:hover {
-  background: #1d4ed8;
+  background: #0055b0;
 }
 
 .save-button:disabled {
@@ -204,45 +374,22 @@
   color: var(--text);
 }
 
-.app-error {
-  padding: 10px 20px;
-  background: var(--code-bg);
-  color: var(--error);
-  font-size: 13px;
-}
-
-.map-area {
-  position: relative;
-}
-
-.map-loading {
+.app-messages {
   position: absolute;
-  z-index: 1000;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 8px 12px;
-  background: var(--bg);
-  border-radius: 6px;
-  font-size: 13px;
+  z-index: 4;
+  top: calc(var(--map-top) + 57px);
+  right: var(--map-right);
+  max-width: min(420px, calc(100% - var(--map-left) - var(--map-right)));
 }
 
-/* 建物詳細の末尾に配置するレビュー一覧リンク */
-.review-list-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  margin-top: 24px;
-  padding: 16px 0;
-  border: 0;
-  border-top: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-h);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-  text-align: left;
+.app-error {
+  margin-bottom: 5px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--error);
+  box-shadow: var(--map-shadow);
+  font-size: 13px;
 }
 
 .review-list-link:hover,
@@ -355,9 +502,15 @@
 }
 
 @media (max-width: 760px) {
-  .map-layout.with-details {
-    grid-template-columns: minmax(0, 1fr);
+  :root {
+    --map-edge: 12px;
+    --map-bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
   }
+
+  .app-header h1 { font-size: 18px; }
+  .brand-button { padding: 8px 11px 8px 9px; }
+  .brand-button svg { width: 20px; height: 23px; }
+  .auth-nickname { max-width: 110px; }
 
   .mobile-drawer-viewport {
     position: fixed;
@@ -369,24 +522,22 @@
   .mobile-detail-panel {
     box-sizing: border-box;
     position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: calc(100dvh - 12px);
+    right: var(--map-right);
+    bottom: var(--map-bottom);
+    left: var(--map-left);
+    height: calc(100dvh - var(--map-bottom) - var(--map-top) - 56px);
     /* スナップ位置とドラッグ量から画面外の高さを求める。 */
     --sheet-offset: max(0px, calc(var(--drawer-snap-point-offset, 0px) + var(--drawer-swipe-movement-y, 0px)));
-    border: 1px solid var(--border);
-    border-bottom: 0;
-    border-radius: 18px 18px 0 0;
-    background: var(--bg);
-    color: var(--text-h);
-    box-shadow: 0 -8px 28px rgb(0 0 0 / 18%);
-    pointer-events: auto;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
     transform: translateY(calc(var(--drawer-snap-point-offset) + var(--drawer-swipe-movement-y)));
     transition: transform 260ms ease;
   }
 
-  /* 計測用のパネル高は保ち、本文とフッターを画面内に収める。 */
+  /* 見えている範囲に本文と追加ボタンを収める。 */
   .sheet-visible-area {
     box-sizing: border-box;
     position: absolute;
@@ -395,6 +546,11 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    border: 1px solid var(--panel-building-line);
+    border-radius: inherit;
+    background: var(--bg);
+    box-shadow: var(--map-shadow);
+    pointer-events: auto;
     transition: bottom 260ms ease;
   }
 
@@ -415,17 +571,27 @@
   }
 
   .sheet-handle {
-    display: block;
-    width: 38px;
-    height: 5px;
-    margin: 9px auto 3px;
-    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .sheet-handle::before {
+    content: '';
+    width: 30px;
+    height: 4px;
+    border-radius: 4px;
     background: var(--text);
     opacity: 0.55;
   }
 
   .mobile-detail-panel .detail-header {
-    padding: 10px 20px 12px;
+    padding: 0 16px 11px;
   }
 
   .mobile-detail-panel .detail-header h2 {
@@ -433,15 +599,27 @@
   }
 
   .mobile-detail-panel .detail-content {
-    overscroll-behavior: contain;
+    flex: 1 1 auto;
+    padding-inline: 16px;
     -webkit-overflow-scrolling: touch;
-    scroll-padding-bottom: 24px;
+    scroll-padding-bottom: 16px;
   }
 
   .mobile-detail-panel .detail-footer {
-    /* ホームインジケーターとの重なりを避ける。 */
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-block: 7px;
   }
+
+  .app-messages { z-index: 1600; }
+}
+
+@media (max-width: 600px) {
+  .auth-restricted { display: none; }
+}
+
+@media (max-width: 360px) {
+  .app-header h1 { font-size: 16px; }
+  .brand-button { gap: 5px; }
+  .auth-button { padding-inline: 7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -457,6 +635,8 @@
   gap: 10px;
   margin: 12px 0 16px;
 }
+
+.room-photo-section:not(:has(.room-photo-item, .room-photo-add, [role='status'])) { display: none; }
 
 .room-photo-add {
   position: relative;

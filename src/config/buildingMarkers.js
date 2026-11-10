@@ -1,35 +1,23 @@
-import { icon } from 'leaflet'
-import buildingMarkerUrl from '../assets/markers/building-marker.svg'
+import { divIcon } from 'leaflet'
 
-// 共通設定
-const markerOptions = {
-  iconSize: [44, 44],
-  iconAnchor: [22, 22],
-  popupAnchor: [0, -24],
-}
+const buildingSymbol = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 20V4h10v16M4 20h16M10 8h4m-4 4h4m-4 4h4"/>
+  </svg>
+`
 
-// アイコンを生成する
-function createMarkerIcon(url) {
-  return icon({
-    iconUrl: url,
-    ...markerOptions,
-  })
-}
+const marker = divIcon({
+  className: 'building-marker',
+  iconSize: [32, 32],
+  html: buildingSymbol,
+})
 
-// アイコン一覧
-const markerIcons = {
-  building: createMarkerIcon(buildingMarkerUrl),
-}
+const selectedMarker = divIcon({
+  className: 'building-marker building-marker-selected',
+  iconSize: [40, 40],
+  html: buildingSymbol,
+})
 
-// 建物ごとのアイコン設定
-const buildingIconTypes = {
-  'building-1': 'building',
-  'building-2': 'building',
-  'building-003': 'building',
-}
-
-// 建物に対応するアイコンを取得
-export function getBuildingMarkerIcon(building) {
-  const type = buildingIconTypes[building.id] ?? 'building'
-  return markerIcons[type] ?? markerIcons.building
+export function getBuildingMarkerIcon(selected) {
+  return selected ? selectedMarker : marker
 }
