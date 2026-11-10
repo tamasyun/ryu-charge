@@ -1,27 +1,4 @@
-/* ヘッダーとログイン画面のスタイル。 */
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.auth-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.auth-nickname {
-  max-width: 220px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--text);
-  font-size: 13px;
-}
-
+/* ログイン画面のスタイル。 */
 .auth-mode-switch {
   display: flex;
   gap: 4px;
@@ -64,29 +41,6 @@
   overflow-wrap: anywhere;
 }
 
-.auth-restricted {
-  color: var(--error);
-  font-size: 12px;
-}
-
-.auth-status {
-  color: var(--text);
-  font-size: 13px;
-}
-
-.auth-button {
-  flex-shrink: 0;
-  padding: 9px 14px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg);
-  color: var(--text-h);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.auth-button:hover { background: var(--code-bg); }
 .auth-button:disabled,
 .write-review-button:disabled,
 .add-button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -182,15 +136,5 @@
 .review-login-required p { font-size: 14px; }
 
 @media (max-width: 600px) {
-  .app-header { padding: 12px; }
-  .auth-header { gap: 6px; }
-  .auth-button { padding: 9px 10px; }
-  .auth-nickname { max-width: 110px; }
-  .auth-restricted { display: none; }
   .login-dialog { padding: 20px; }
-}
-
-@media (max-width: 360px) {
-  .app-header h1 { font-size: 22px; }
-  .auth-button { padding: 9px 8px; }
 }
