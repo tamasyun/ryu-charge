@@ -1,0 +1,5 @@
+project_id = "ryu-charge"
+
+# 新しいJWT署名鍵にも対応するため、関数内でAuth.getUserによる検証を必ず行う。
+[functions.delete-account]
+verify_jwt = false

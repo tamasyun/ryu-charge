@@ -20,11 +20,21 @@ const authStorage = createAuthStorage(
 
 export const setKeepSignedIn = authStorage.setKeepSignedIn
 
+// Authユーザー削除後、サーバーへのsignOutが失敗しても保存済みセッションを除去する。
+export async function clearDeletedAccountSession() {
+  try {
+    await supabase.auth.signOut({ scope: 'local' })
+  } finally {
+    authStorage.storage.removeItem(storageKey)
+  }
+}
+
 export const supabase = createClient(
   supabaseUrl,
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
   {
     auth: {
+      // supabase-js 2.117以降、パスキーAPIは既定で有効（experimental.passkeyは非推奨）。
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
