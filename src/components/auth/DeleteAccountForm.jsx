@@ -3,17 +3,19 @@ import SecurityChallenge from './SecurityChallenge'
 import { supabase, clearDeletedAccountSession } from '../../lib/supabase'
 import { createAccountService } from '../../services/account'
 import { createAccountDeletionService } from '../../services/accountDeletion'
+import { isDemoEmail } from '../../demo/account.js'
 
 const account = createAccountService(supabase)
 const deletion = createAccountDeletionService(supabase)
 const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? ''
 
 export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPending }) {
+  const demo = isDemoEmail(user.email)
   const id = useId()
   const [codeSent, setCodeSent] = useState(false)
   const [code, setCode] = useState('')
   const [wait, setWait] = useState(0)
-  const [proof, setProof] = useState(null)
+  const [proof, setProof] = useState(demo ? 'browser-demo' : null)
   const [confirmation, setConfirmation] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
   const [message, setMessage] = useState('')
@@ -84,7 +86,9 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
     try {
       const result = await deletion.remove(proof, confirmation)
       if (!result?.deleted) throw new Error('削除結果を確認できませんでした。もう一度お試しください。')
-      try { await clearDeletedAccountSession() } catch { /* ローカルの保存領域はfinallyで消去される。 */ }
+      if (!demo) {
+        try { await clearDeletedAccountSession() } catch { /* ローカルの保存領域はfinallyで消去される。 */ }
+      }
       onDeleted()
     } catch (error) {
       if (error.code === 'not_authenticated') {
@@ -106,7 +110,7 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
 
   return (
     <section className="account-section account-danger" aria-label="アカウント削除">
-      <p>アカウントとパスキー、レビュー、写真を削除します。教室・コンセント情報は投稿者名を外して残します。</p>
+      <p>{demo ? 'このブラウザのデモデータとパスキーの登録情報を削除します。端末に保存されたパスキーは、端末の設定から削除してください。' : 'アカウントとパスキー、レビュー、写真を削除します。教室・コンセント情報は投稿者名を外して残します。'}</p>
       {!proof ? <>
         <p><strong className="login-destination">{user.email}</strong>に届く8桁のコードで本人確認します。</p>
         {siteKey && <SecurityChallenge siteKey={siteKey} widgetRef={captchaRef}
@@ -126,7 +130,7 @@ export default function DeleteAccountForm({ user, busy, setBusy, onDeleted, onPe
         <p>この操作は取り消せません。</p>
         <label className="login-remember">
           <input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} disabled={busy} />
-          <span>削除対象と、設備情報が残ることを確認しました</span>
+          <span>{demo ? '削除対象を確認しました' : '削除対象と、設備情報が残ることを確認しました'}</span>
         </label>
         <label htmlFor={`${id}-confirm`}>最終確認として「削除する」と入力してください</label>
         <input id={`${id}-confirm`} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} autoComplete="off" />

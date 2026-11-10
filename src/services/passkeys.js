@@ -1,4 +1,6 @@
 import { isUniversityEmail } from '../utils/universityEmail.js'
+import { demoAccount, isDemoEmail } from '../demo/account.js'
+import { demoPasskeys } from '../demo/passkeys.js'
 
 export function supportsPasskeys() {
   return typeof window !== 'undefined' && window.isSecureContext === true &&
@@ -16,7 +18,8 @@ export function passkeyErrorMessage(error) {
 
 export function createPasskeyService(client) {
   return {
-    async signIn(captchaToken) {
+    async signIn(captchaToken, email) {
+      if (isDemoEmail(email)) return demoPasskeys.signIn()
       const { data, error } = await client.auth.signInWithPasskey({
         options: captchaToken ? { captchaToken } : {},
       })
@@ -28,11 +31,13 @@ export function createPasskeyService(client) {
       return data
     },
     async register() {
+      if (demoAccount.isActive()) return demoPasskeys.register()
       const { data, error } = await client.auth.registerPasskey()
       if (error) throw error
       return data
     },
     async list() {
+      if (demoAccount.isActive()) return demoPasskeys.list()
       const { data, error } = await client.auth.passkey.list()
       if (error) throw error
       return data ?? []
@@ -42,11 +47,13 @@ export function createPasskeyService(client) {
       if (!friendlyName || Array.from(friendlyName).length > 120 || /\p{Cc}/u.test(friendlyName)) {
         throw new Error('パスキーの名前を1〜120文字で入力してください。')
       }
+      if (demoAccount.isActive()) return demoPasskeys.rename(passkeyId, friendlyName)
       const { data, error } = await client.auth.passkey.update({ passkeyId, friendlyName })
       if (error) throw error
       return data
     },
     async remove(passkeyId) {
+      if (demoAccount.isActive()) return demoPasskeys.remove(passkeyId)
       const { error } = await client.auth.passkey.delete({ passkeyId })
       if (error) throw error
     },

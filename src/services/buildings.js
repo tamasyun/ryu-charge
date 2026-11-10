@@ -1,18 +1,24 @@
-import { supabase } from '../lib/supabase'
+import { getDataClient } from '../lib/supabase'
 import { fetchAuthorNames } from './profiles'
+import { demoAccount } from '../demo/account.js'
 
 export async function createRoom(record) {
-  const { error } = await supabase.from('rooms').insert(record)
+  if (demoAccount.isActive()) return demoAccount.add('rooms', [record])
+  const { error } = await getDataClient().from('rooms').insert(record)
   if (error) throw error
 }
 
 export async function createOutlet(record) {
-  const { error } = await supabase.from('outlets').insert(record)
+  if (demoAccount.isActive()) return demoAccount.add('outlets', [record])
+  const { error } = await getDataClient().from('outlets').insert(record)
   if (error) throw error
 }
 
 export async function fetchBuildings() {
-  const { data, error } = await supabase
+  const demo = demoAccount.isActive()
+  const guard = demo ? demoAccount.capture() : () => {}
+  const client = getDataClient()
+  const { data, error } = await client
     .from('buildings')
     .select(`
       id, name, latitude, longitude,
@@ -27,9 +33,9 @@ export async function fetchBuildings() {
 
   const authorNames = await fetchAuthorNames((data ?? []).flatMap(building =>
     (building.rooms ?? []).flatMap(room => [room.user_id, ...(room.outlets ?? []).map(outlet => outlet.user_id)])
-  ))
+  ), client)
 
-  return (data ?? []).map(building => ({
+  const buildings = (data ?? []).map(building => ({
     ...building,
     rooms: (building.rooms ?? [])
       .map(room => ({
@@ -43,4 +49,6 @@ export async function fetchBuildings() {
         (a.floor ?? 0) - (b.floor ?? 0) || a.name.localeCompare(b.name, 'ja')
       ),
   }))
+  guard()
+  return demo ? demoAccount.mergeBuildings(buildings) : buildings
 }

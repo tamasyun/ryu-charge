@@ -1,7 +1,7 @@
 import PhotoViewer from '../photos/PhotoViewer'
 import { useEffect, useState } from 'react'
 import { fetchReviews, deleteReview } from '../../services/reviews'
-import { supabase } from '../../lib/supabase'
+import { appAuth } from '../../lib/supabase'
 import { authorLabel } from '../../utils/nickname'
 
 export default function ReviewList({ roomId, onDeleted, authorVersion }) {
@@ -15,7 +15,7 @@ export default function ReviewList({ roomId, onDeleted, authorVersion }) {
 
   // ログイン・ログアウト後も、自分の投稿にだけ削除ボタンを表示する。
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = appAuth.onAuthStateChange((_event, session) => {
       setCurrentUserId(session?.user?.id ?? null)
     })
     return () => subscription.unsubscribe()

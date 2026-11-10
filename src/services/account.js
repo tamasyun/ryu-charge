@@ -1,5 +1,6 @@
 import { isUniversityEmail } from '../utils/universityEmail.js'
 import { isValidNickname, normalizeNickname } from '../utils/nickname.js'
+import { demoAccount, isDemoEmail } from '../demo/account.js'
 
 // クライアントを受け取り、ログインと新規登録で同じ送信・検証処理を使う。
 export function createAccountService(client) {
@@ -27,9 +28,11 @@ export function createAccountService(client) {
   }
 
   return {
+    signInDemo() { return demoAccount.signIn() },
     async sendCode({ email, mode, nickname, captchaToken }) {
       if (mode !== 'login' && mode !== 'signup') throw new Error('認証方法を確認してください。')
       const normalizedEmail = email.trim().toLowerCase()
+      if (isDemoEmail(normalizedEmail)) throw new Error('デモ用のアドレスにはメールを送信しません。ログインからお進みください。')
       if (!isUniversityEmail(normalizedEmail)) {
         throw new Error('琉球大学のメールアドレスのみ利用できます。')
       }
@@ -45,6 +48,7 @@ export function createAccountService(client) {
     },
 
     async verifyCode({ email, code }) {
+      if (isDemoEmail(email)) throw new Error('デモアカウントに認証コードは不要です。')
       if (!/^\d{8}$/.test(code)) throw new Error('8桁の認証コードを入力してください。')
       const { data, error } = await client.auth.verifyOtp({ email, token: code, type: 'email' })
       if (error) throw error
@@ -53,6 +57,7 @@ export function createAccountService(client) {
 
     async updateNickname(user, value) {
       const nickname = normalizeNickname(value)
+      if (demoAccount.isUser(user) && isValidNickname(nickname)) return demoAccount.updateNickname(nickname)
       if (!user?.id || !isUniversityEmail(user.email) || !isValidNickname(nickname)) {
         throw new Error('ニックネームを1〜20文字で入力してください。')
       }
@@ -63,6 +68,7 @@ export function createAccountService(client) {
     },
 
     async registerInitialPasskey(user) {
+      if (demoAccount.isUser(user)) return false
       // 呼び出し元は新規登録のOTP完了ハンドラーのみ。再読込・通常ログインでは呼ばない。
       const profile = await this.loadProfile(user)
       if (!profile) return false
@@ -76,6 +82,7 @@ export function createAccountService(client) {
     },
 
     async loadProfile(user) {
+      if (demoAccount.isUser(user)) return demoAccount.profile()
       const profile = await fetchProfile(user.id)
       if (profile) return profile
       // メール認証が済んでから公開プロフィールを作る。途中で閉じても再開できる。

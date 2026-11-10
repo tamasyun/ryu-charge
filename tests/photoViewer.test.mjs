@@ -22,6 +22,7 @@ async function mount(page, { review = false, mobile = false } = {}) {
   ` }))
   await page.route('**/src/lib/supabase*', route => route.fulfill({ contentType: 'text/javascript', body: `
     export const supabase = { auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) } }
+    export const appAuth = supabase.auth
   ` }))
   await page.goto(`${baseURL}/tests/browser-harness.html`)
   await page.evaluate(async ({ review, mobile }) => {
