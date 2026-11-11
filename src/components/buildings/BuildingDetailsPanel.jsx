@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Drawer } from '@base-ui/react/drawer'
+import CloseIcon from '../CloseIcon'
 
 export default function BuildingDetailsPanel({
   building,
@@ -67,7 +68,7 @@ export default function BuildingDetailsPanel({
           className="close-button"
           aria-label={building ? '詳細を閉じる' : '建物一覧を閉じる'}
           onClick={building ? onClose : () => onSnapIndexChange(0)}
-        >×</button>
+        ><CloseIcon /></button>
       )}
     </div>
   )
