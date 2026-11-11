@@ -6,18 +6,20 @@ const buildingSymbol = `
   </svg>
 `
 
-const marker = divIcon({
-  className: 'building-marker',
-  iconSize: [32, 32],
-  html: buildingSymbol,
+export const locationMarkerIcon = divIcon({
+  className: 'location-marker',
+  iconSize: [44, 44],
+  html: '<span class="location-dot" aria-hidden="true"></span>',
 })
 
-const selectedMarker = divIcon({
-  className: 'building-marker building-marker-selected',
-  iconSize: [40, 40],
-  html: buildingSymbol,
-})
-
-export function getBuildingMarkerIcon(selected) {
-  return selected ? selectedMarker : marker
+export function getBuildingMarkerIcon(selected, zoom = 17, offset = [0, 0]) {
+  const size = 28 + (19 - zoom) * 2 + (selected ? 6 : 0)
+  return divIcon({
+    className: `building-marker${selected ? ' building-marker-selected' : ''}`,
+    iconSize: [size, size],
+    // 建物は地点の少し上、現在地は地点の中心に表示する。
+    iconAnchor: [size / 2 - offset[0], size + 8 - offset[1]],
+    tooltipAnchor: [offset[0], offset[1] - size / 2 - 8],
+    html: buildingSymbol,
+  })
 }

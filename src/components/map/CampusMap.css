@@ -131,6 +131,31 @@
   color: #fff;
 }
 
+.building-marker:focus-visible,
+.location-marker:focus-visible {
+  outline: 3px solid var(--map-action-text);
+  outline-offset: 3px;
+}
+
+.campus-map .location-marker {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  pointer-events: none;
+}
+
+.location-dot {
+  box-sizing: border-box;
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--map-blue);
+  box-shadow: 0 0 0 6px rgb(0 101 207 / 18%), 0 1px 4px rgb(0 0 0 / 25%);
+}
+
 .campus-map .building-label {
   border: 1px solid var(--panel-building-line);
   border-radius: 9px;
