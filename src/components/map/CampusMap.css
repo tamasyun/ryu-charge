@@ -169,17 +169,14 @@
 
 @media (max-width: 760px) {
   .campus-map {
-    --map-controls-bottom: calc(var(--sheet-height) + var(--map-bottom) + 10px);
+    --map-controls-bottom: calc(var(--map-bottom) + var(--map-sheet-height, var(--sheet-height)) + 10px);
   }
 
+  .sheet-collapsed .campus-map { --map-controls-bottom: var(--map-bottom); }
   .sheet-expanded .campus-map :is(.leaflet-control-zoom, .map-location) { display: none; }
 }
 
 @media (max-width: 760px) and (max-height: 560px) {
-  .campus-map {
-    --map-controls-bottom: calc(var(--sheet-height) + var(--map-bottom) + 6px);
-  }
-
   .campus-map .leaflet-control-zoom { display: flex; }
   .campus-map .leaflet-control-zoom a:first-child {
     border-right: 1px solid var(--panel-room-line);

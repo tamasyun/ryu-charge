@@ -512,6 +512,33 @@
   .brand-button svg { width: 20px; height: 23px; }
   .auth-nickname { max-width: 110px; }
 
+  .mobile-list-button {
+    position: absolute;
+    z-index: 900;
+    left: var(--map-left);
+    bottom: var(--map-bottom);
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: 1px solid var(--panel-building-line);
+    border-radius: 50%;
+    background: var(--bg);
+    color: var(--text-h);
+    box-shadow: var(--map-shadow);
+    cursor: pointer;
+  }
+
+  .mobile-list-button svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
   .mobile-drawer-viewport {
     position: fixed;
     inset: 0;
@@ -526,22 +553,29 @@
     bottom: var(--map-bottom);
     left: var(--map-left);
     height: calc(100dvh - var(--map-bottom) - var(--map-top) - 56px);
-    /* スナップ位置とドラッグ量から画面外の高さを求める。 */
-    --sheet-offset: max(0px, calc(var(--drawer-snap-point-offset, 0px) + var(--drawer-swipe-movement-y, 0px)));
+    /* Drawer の初回計測前も、選択中の高さより大きく描画しない。 */
+    --sheet-offset: max(
+      0px,
+      calc(var(--drawer-snap-point-offset, 0px) + var(--drawer-swipe-movement-y, 0px)),
+      calc(100% - var(--sheet-height))
+    );
     overflow: visible;
     border: 0;
     background: transparent;
     box-shadow: none;
     pointer-events: none;
-    transform: translateY(calc(var(--drawer-snap-point-offset) + var(--drawer-swipe-movement-y)));
-    transition: transform 260ms ease;
+    transform: translateY(var(--sheet-offset));
+    transition: transform 160ms ease-out;
   }
 
   /* 見えている範囲に本文と追加ボタンを収める。 */
   .sheet-visible-area {
     box-sizing: border-box;
     position: absolute;
-    inset: 0 0 var(--sheet-offset);
+    top: 0;
+    bottom: var(--sheet-offset);
+    left: 0;
+    width: 100%;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -551,12 +585,16 @@
     background: var(--bg);
     box-shadow: var(--map-shadow);
     pointer-events: auto;
-    transition: bottom 260ms ease;
+    transition: bottom 160ms ease-out;
   }
 
   .mobile-detail-panel[data-swiping],
   .mobile-detail-panel[data-swiping] .sheet-visible-area {
     transition-duration: 0ms;
+  }
+
+  .mobile-detail-panel[data-swiping] {
+    --sheet-offset: max(0px, calc(var(--drawer-snap-point-offset) + var(--drawer-swipe-movement-y)));
   }
 
   .mobile-detail-panel[data-starting-style],

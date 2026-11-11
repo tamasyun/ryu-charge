@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Drawer } from '@base-ui/react/drawer'
 
 export default function BuildingDetailsPanel({
@@ -6,6 +6,7 @@ export default function BuildingDetailsPanel({
   isMobile,
   snapPoints,
   snapIndex,
+  sheetHeight,
   onSnapIndexChange,
   onClose,
   overviewRequest,
@@ -15,11 +16,13 @@ export default function BuildingDetailsPanel({
   const titleId = useId()
   const titleRef = useRef(null)
   const contentRef = useRef(null)
+  const [popupNode, setPopupNode] = useState(null)
   const previousBuildingId = useRef(null)
   const buildingId = building?.id ?? null
   const title = building?.name ?? '建物一覧'
   const Title = isMobile ? Drawer.Title : 'h2'
   const Content = isMobile ? Drawer.Content : 'div'
+  const collapsed = isMobile && !building && snapIndex === 0
 
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0
@@ -34,20 +37,47 @@ export default function BuildingDetailsPanel({
     }
   }, [buildingId])
 
+  // 高さの変化だけを監視し、地図操作をシートの上に置く。
+  useEffect(() => {
+    const visibleArea = popupNode?.querySelector('.sheet-visible-area')
+    const layout = document.querySelector('.map-layout')
+    if (!isMobile || !visibleArea || !layout) return
+
+    function updateHeight() {
+      layout.style.setProperty('--map-sheet-height', `${visibleArea.getBoundingClientRect().height}px`)
+    }
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(visibleArea)
+    updateHeight()
+    return () => {
+      observer.disconnect()
+      layout.style.removeProperty('--map-sheet-height')
+    }
+  }, [isMobile, popupNode])
+
   const header = (
     <div className="detail-header">
       <div>
         <Title id={titleId} ref={titleRef} tabIndex={-1}>{title}</Title>
         {building && <p>{building.rooms.length}教室</p>}
       </div>
-      {building && (
-        <button type="button" className="close-button" aria-label="詳細を閉じる" onClick={onClose}>×</button>
+      {(building || (isMobile && snapIndex > 0)) && (
+        <button
+          type="button"
+          className="close-button"
+          aria-label={building ? '詳細を閉じる' : '建物一覧を閉じる'}
+          onClick={building ? onClose : () => onSnapIndexChange(0)}
+        >×</button>
       )}
     </div>
   )
 
   const content = (
-    <Content ref={contentRef} className="detail-content" data-base-ui-swipe-ignore="y">
+    <Content
+      ref={contentRef}
+      className="detail-content"
+      data-base-ui-swipe-ignore="y"
+    >
       {children}
     </Content>
   )
@@ -62,21 +92,32 @@ export default function BuildingDetailsPanel({
     )
   }
 
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        className="mobile-list-button"
+        aria-label="建物一覧を開く"
+        aria-expanded={false}
+        onClick={() => onSnapIndexChange(1)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 7h14M5 12h14M5 17h14" />
+        </svg>
+      </button>
+    )
+  }
+
   const expanded = snapIndex === snapPoints.length - 1
   const panelLabel = building ? '建物詳細' : '建物一覧'
-  const compactIndex = building ? 1 : 0
   return (
     <Drawer.Root
       open
       onOpenChange={(open, eventDetails) => {
         if (open) return
         eventDetails.cancel()
-        // 一覧は開いたままにし、詳細を閉じると一覧に戻す。
-        if (eventDetails.reason === 'swipe' && snapIndex > 0) {
-          onSnapIndexChange(snapIndex - 1)
-        } else if (building) {
-          onClose()
-        }
+        if (building) onClose()
+        else onSnapIndexChange(0)
       }}
       modal={false}
       disablePointerDismissal
@@ -85,13 +126,14 @@ export default function BuildingDetailsPanel({
       snapPoint={snapPoints[snapIndex]}
       onSnapPointChange={point => {
         const index = snapPoints.indexOf(point)
-        if (index >= 0) onSnapIndexChange(index)
+        if (building && index === 0) onClose()
+        else if (index >= 0) onSnapIndexChange(index)
       }}
     >
       <Drawer.VirtualKeyboardProvider>
         <Drawer.Portal>
-          <Drawer.Viewport className="mobile-drawer-viewport">
-            <Drawer.Popup className="detail-panel mobile-detail-panel" initialFocus={false}>
+          <Drawer.Viewport className="mobile-drawer-viewport" style={{ '--sheet-height': sheetHeight }}>
+            <Drawer.Popup ref={setPopupNode} className="detail-panel mobile-detail-panel" initialFocus={titleRef}>
               <div className="sheet-visible-area">
                 <div className="sheet-drag-area">
                   <button
@@ -99,7 +141,7 @@ export default function BuildingDetailsPanel({
                     className="sheet-handle"
                     aria-label={panelLabel + (expanded ? 'を縮める' : 'を広げる')}
                     aria-expanded={expanded}
-                    onClick={() => onSnapIndexChange(expanded ? compactIndex : snapPoints.length - 1)}
+                    onClick={() => onSnapIndexChange(expanded ? 1 : snapPoints.length - 1)}
                   />
                   {header}
                 </div>

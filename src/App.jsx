@@ -18,13 +18,21 @@ import LoginDialog from './components/auth/LoginDialog'
 import ProfileDialog from './components/auth/ProfileDialog'
 import AccountSettingsDialog from './components/auth/AccountSettingsDialog'
 
-const PORTRAIT_SNAP_POINTS = ['220px', 0.5, 0.85]
-const LANDSCAPE_SNAP_POINTS = [0.45, 0.6, 0.8]
+const SHEET_SNAP_POINTS = {
+  list: {
+    portrait: ['56px', 0.3, 0.85],
+    landscape: ['56px', 0.4, 0.8],
+  },
+  details: {
+    portrait: ['56px', 0.4, 0.85],
+    landscape: ['56px', 0.5, 0.8],
+  },
+}
 
 function App() {
   const isMobile = useMediaQuery('(max-width: 760px)')
   const isLandscape = useMediaQuery('(orientation: landscape)')
-  const [sheetSnapIndex, setSheetSnapIndex] = useState(0)
+  const [sheetSnapIndex, setSheetSnapIndex] = useState(1)
   const [overviewRequest, setOverviewRequest] = useState(0)
   const [buildings, setBuildings] = useState([])
   const [selectedBuildingId, setSelectedBuildingId] = useState(null)
@@ -66,7 +74,7 @@ function App() {
   const selectedRoom =
     selectedBuilding?.rooms.find(room => room.id === selectedRoomId) ?? null
   const reviewOverview = useReviewOverview(selectedBuilding, reviewOverviewVersion)
-  const sheetSnapPoints = isLandscape ? LANDSCAPE_SNAP_POINTS : PORTRAIT_SNAP_POINTS
+  const sheetSnapPoints = SHEET_SNAP_POINTS[selectedBuilding ? 'details' : 'list'][isLandscape ? 'landscape' : 'portrait']
   const sheetSnap = sheetSnapPoints[sheetSnapIndex]
   const sheetHeight = typeof sheetSnap === 'number' ? `${sheetSnap * 100}dvh` : sheetSnap
 
@@ -262,7 +270,7 @@ function App() {
     setIsFormOpen(false)
     setDetailView('details')
     setSelectedRoomId(null)
-    setSheetSnapIndex(0)
+    setSheetSnapIndex(1)
   }
 
   function showOverview() {
@@ -535,7 +543,7 @@ function App() {
       </div>
 
       <main
-        className={`map-layout${sheetSnapIndex === 2 ? ' sheet-expanded' : ''}`}
+        className={`map-layout${sheetSnapIndex === 2 ? ' sheet-expanded' : ''}${isMobile && !selectedBuilding && sheetSnapIndex === 0 ? ' sheet-collapsed' : ''}`}
         style={isMobile ? { '--sheet-height': sheetHeight } : undefined}
       >
         <CampusMap
@@ -551,6 +559,7 @@ function App() {
           isMobile={isMobile}
           snapPoints={sheetSnapPoints}
           snapIndex={sheetSnapIndex}
+          sheetHeight={sheetHeight}
           onSnapIndexChange={setSheetSnapIndex}
           onClose={closeDetails}
           overviewRequest={overviewRequest}
