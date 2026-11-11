@@ -94,8 +94,7 @@ export default function ReviewList({ roomId, onDeleted, authorVersion }) {
           {review.image_url && (
             <div style={{ marginTop: '8px' }}>
               <PhotoViewer
-                src={review.image_url}
-                alt="レビュー写真"
+                photos={[{ src: review.image_url, alt: 'レビュー写真' }]}
                 className="review-photo-trigger"
                 imageClassName="review-photo-thumbnail"
               />

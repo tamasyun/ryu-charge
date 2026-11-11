@@ -40,15 +40,15 @@ export default function BuildingRooms({
 
             <div className="room-photo-section">
               <div className="room-photo-list" role="group" aria-label={`${room.name}の写真`} data-base-ui-swipe-ignore>
-                {photos.map(photo => (
-                  <PhotoViewer
-                    key={photo.id}
-                    src={photo.image_url}
-                    alt={`${room.name}のコンセント・教室の写真`}
-                    className="room-photo-item"
-                    imageClassName="room-photo"
-                  />
-                ))}
+                <PhotoViewer
+                  photos={photos.map(photo => ({
+                    id: photo.id,
+                    src: photo.image_url,
+                    alt: `${room.name}のコンセント・教室の写真`,
+                  }))}
+                  className="room-photo-item"
+                  imageClassName="room-photo"
+                />
                 {canPost && (
                   <label className={`room-photo-add ${uploadingRoomId != null ? 'is-disabled' : ''}`}>
                     <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
