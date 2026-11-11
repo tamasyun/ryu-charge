@@ -53,8 +53,8 @@ it.each([false, true])('first-login enrollment is attempted once; cancellation=%
   expect(enrollment.register).toHaveBeenCalledTimes(1)
   expect(demoAccount.isActive()).toBe(true)
   expect(window.alert).toHaveBeenCalledTimes(1)
-  if (cancelled) expect(onPasskeyNotice).toHaveBeenCalledWith(expect.stringContaining('ログインは完了'))
-  else expect(onPasskeyNotice).not.toHaveBeenCalled()
+  if (cancelled) expect(window.alert.mock.calls[0][0]).toContain('ログインできましたが')
+  expect(onPasskeyNotice).not.toHaveBeenCalled()
   demoAccount.signOut()
   await act(async () => fireEvent.submit(form))
   expect(enrollment.register).toHaveBeenCalledTimes(1)
@@ -63,13 +63,17 @@ it.each([false, true])('first-login enrollment is attempted once; cancellation=%
   expect(auth.from).not.toHaveBeenCalled()
 })
 
-it('existing demo accounts do not automatically open enrollment', async () => {
+it('existing demo accounts receive one enrollment attempt', async () => {
   demoAccount.signIn()
   demoAccount.signOut()
   render(<LoginDialog open onClose={() => {}} onAfterClose={() => {}} returnFocusRef={{ current: null }} />)
   fireEvent.change(screen.getByLabelText('大学のメールアドレス'), { target: { value: 'demo@example.com' } })
-  await act(async () => fireEvent.submit(screen.getByLabelText('大学のメールアドレス').closest('form')))
-  expect(enrollment.register).not.toHaveBeenCalled()
+  const form = screen.getByLabelText('大学のメールアドレス').closest('form')
+  await act(async () => fireEvent.submit(form))
+  expect(enrollment.register).toHaveBeenCalledTimes(1)
+  demoAccount.signOut()
+  await act(async () => fireEvent.submit(form))
+  expect(enrollment.register).toHaveBeenCalledTimes(1)
 })
 
 it('an empty email uses the saved demo passkey without production CAPTCHA or authentication', async () => {
