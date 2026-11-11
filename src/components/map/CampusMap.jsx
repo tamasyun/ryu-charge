@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { DomEvent, latLngBounds } from 'leaflet'
-import { CircleMarker, MapContainer, Marker, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, Pane, TileLayer, Tooltip, ZoomControl, useMap, useMapEvent, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import './CampusMap.css'
-import { getBuildingMarkerIcon } from '../../config/buildingMarkers'
+import { getBuildingMarkerIcon, locationMarkerIcon } from '../../config/buildingMarkers'
+import { layoutBuildingMarkers } from '../../utils/layoutBuildingMarkers'
 
 const CAMPUS_CENTER = [26.2508, 127.7662]
 const CAMPUS_BOUNDS = latLngBounds([26.241, 127.756], [26.257, 127.776])
 const OVERVIEW_ZOOM = 16
-const INITIAL_ZOOM = 17
+const BUILDING_ZOOM = 17
 const MAX_ZOOM = 19
 
 function focusMapAt(map, position, isMobile, zoom = map.getZoom()) {
@@ -20,11 +21,18 @@ function focusMapAt(map, position, isMobile, zoom = map.getZoom()) {
 
 function MapView({ selectedBuilding, isMobile, overviewRequest }) {
   const map = useMap()
+  const initialized = useRef(false)
   const lastOverviewRequest = useRef(overviewRequest)
   const zooming = useRef(false)
   const pendingView = useRef(null)
   const latitude = selectedBuilding?.latitude
   const longitude = selectedBuilding?.longitude
+
+  useLayoutEffect(() => {
+    if (initialized.current) return
+    initialized.current = true
+    focusMapAt(map, CAMPUS_CENTER, isMobile, OVERVIEW_ZOOM)
+  }, [map, isMobile])
 
   useMapEvents({
     zoomstart() { zooming.current = true },
@@ -47,7 +55,7 @@ function MapView({ selectedBuilding, isMobile, overviewRequest }) {
 
     function move() {
       if (reset) focusMapAt(map, CAMPUS_CENTER, isMobile, OVERVIEW_ZOOM)
-      else focusMapAt(map, [latitude, longitude], isMobile, Math.max(INITIAL_ZOOM, map.getZoom()))
+      else focusMapAt(map, [latitude, longitude], isMobile, Math.max(BUILDING_ZOOM, map.getZoom()))
     }
 
     // 拡大・縮小の途中で押された操作は、アニメーションの完了後に反映する。
@@ -64,49 +72,172 @@ function preventMapDrag(node) {
   return () => DomEvent.off(node)
 }
 
+function markerEvents(activate) {
+  return {
+    click: activate,
+    keydown({ originalEvent }) {
+      if (originalEvent.key !== 'Enter' && originalEvent.key !== ' ') return
+      DomEvent.stop(originalEvent)
+      activate()
+    },
+  }
+}
+
+function MapBuildings({ buildings, selectedBuilding, isMobile, onSelectBuilding }) {
+  const map = useMap()
+  const [zoom, setZoom] = useState(() => map.getZoom())
+  const updateZoom = useCallback(() => setZoom(map.getZoom()), [map])
+  useMapEvent('zoomend', updateZoom)
+  const markers = layoutBuildingMarkers(buildings)
+
+  return (
+    <>
+      {markers.map(({ building, position: buildingPosition, offset }) => {
+        const selected = building.id === selectedBuilding?.id
+        return (
+          <Marker
+            key={building.id}
+            position={buildingPosition}
+            icon={getBuildingMarkerIcon(selected, zoom, offset)}
+            title={building.name}
+            alt={building.name}
+            zIndexOffset={selected ? 1000 : 0}
+            eventHandlers={markerEvents(() => onSelectBuilding(building))}
+          >
+            {selected && (
+              <Tooltip
+                permanent
+                direction={isMobile ? 'top' : 'right'}
+                offset={isMobile ? [0, -24] : [23, 0]}
+                opacity={1}
+                className="building-label"
+              >
+                <strong>{building.name}</strong>
+                <div>コンセント設備：合計 {building.rooms.reduce((total, room) => total + room.outlets.length, 0)} 件</div>
+              </Tooltip>
+            )}
+          </Marker>
+        )
+      })}
+    </>
+  )
+}
+
 function MapLocation({ isMobile }) {
   const map = useMap()
   const [position, setPosition] = useState(null)
   const [locating, setLocating] = useState(false)
   const [message, setMessage] = useState('')
+  const watching = useRef(false)
+  const focusOnFix = useRef(false)
+
+  const startWatching = useCallback(() => {
+    if (watching.current) return
+    watching.current = true
+    setLocating(true)
+    setMessage('現在地を取得しています…')
+    map.locate({ watch: true, setView: false, enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 })
+  }, [map])
 
   useMapEvents({
     locationfound({ latlng }) {
+      if (!watching.current) return
       setLocating(false)
+      setPosition(latlng)
       if (!CAMPUS_BOUNDS.contains(latlng)) {
+        focusOnFix.current = false
         setMessage('現在地は表示範囲外です')
         return
       }
-      setPosition(latlng)
-      focusMapAt(map, latlng, isMobile)
+      setMessage('')
+      if (focusOnFix.current) {
+        focusOnFix.current = false
+        focusMapAt(map, latlng, isMobile, MAX_ZOOM)
+      }
     },
-    locationerror() {
+    locationerror({ code }) {
+      if (!watching.current) return
+      focusOnFix.current = false
       setLocating(false)
-      setMessage('現在地を取得できませんでした')
+      setMessage(code === 1 ? '位置情報の利用を許可してください' : '現在地を取得できませんでした')
+      if (code === 1) {
+        watching.current = false
+        map.stopLocate()
+        setPosition(null)
+      }
     },
     movestart() { setMessage('') },
   })
 
+  // 許可済みなら開始し、未許可の場合はボタンを押すまで権限を求めない。
+  useEffect(() => {
+    let active = true
+    let permission
+    function permissionChanged() {
+      if (permission.state === 'granted') startWatching()
+      else {
+        watching.current = false
+        focusOnFix.current = false
+        map.stopLocate()
+        setPosition(null)
+        setLocating(false)
+        setMessage('')
+      }
+    }
+    async function checkPermission() {
+      try {
+        const status = await navigator.permissions?.query({ name: 'geolocation' })
+        if (!active || !status) return
+        permission = status
+        permission.addEventListener('change', permissionChanged)
+        if (permission.state === 'granted') startWatching()
+      } catch {
+        // 権限照会に未対応のブラウザーでは、ボタンから開始する。
+      }
+    }
+    checkPermission()
+    return () => {
+      active = false
+      permission?.removeEventListener('change', permissionChanged)
+      watching.current = false
+      focusOnFix.current = false
+      map.stopLocate()
+    }
+  }, [map, startWatching])
+
   function locate() {
-    setLocating(true)
-    setMessage('')
-    setPosition(null)
-    map.locate({ setView: false, timeout: 10_000, maximumAge: 15_000 })
+    if (position) {
+      if (CAMPUS_BOUNDS.contains(position)) {
+        setMessage('')
+        focusMapAt(map, position, isMobile, MAX_ZOOM)
+      } else setMessage('現在地は表示範囲外です')
+    } else {
+      watching.current = false
+      map.stopLocate()
+      focusOnFix.current = true
+      startWatching()
+    }
   }
 
   return (
     <>
-      {position && (
-        <CircleMarker
-          center={position}
-          radius={7}
-          className="location-dot"
-          pathOptions={{ color: '#fff', weight: 2, fillColor: '#0065cf', fillOpacity: 1 }}
-          interactive={false}
-        />
-      )}
+      <Pane name="current-location" style={{ zIndex: 640 }}>
+        {position && CAMPUS_BOUNDS.contains(position) && (
+          <Marker
+            position={position}
+            icon={locationMarkerIcon}
+            title="現在地を拡大"
+            alt="現在地を拡大"
+            eventHandlers={markerEvents(() => focusMapAt(map, position, isMobile, MAX_ZOOM))}
+          >
+            <Tooltip direction="bottom" offset={[0, 12]} opacity={1} className="building-label">
+              現在地
+            </Tooltip>
+          </Marker>
+        )}
+      </Pane>
       <div className="map-location" ref={preventMapDrag}>
-        <button type="button" aria-label="現在地を表示" title="現在地を表示" onClick={locate} disabled={locating}>
+        <button type="button" aria-label="現在地を拡大して表示" title="現在地を拡大して表示" onClick={locate} disabled={locating} aria-busy={locating}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5 3.8 10.1l7.3 2.8 2.8 7.3 6.6-16.7Z" /></svg>
         </button>
         <p role="status" className="map-location-status">{message}</p>
@@ -120,8 +251,8 @@ export default function CampusMap({ buildings, selectedBuilding, isMobile, overv
     <section className="map-area" aria-label="キャンパスの地図">
       <MapContainer
         className="campus-map"
-        center={isMobile ? [26.2499, 127.7662] : [26.2508, 127.7651]}
-        zoom={INITIAL_ZOOM}
+        center={CAMPUS_CENTER}
+        zoom={OVERVIEW_ZOOM}
         minZoom={OVERVIEW_ZOOM}
         maxZoom={MAX_ZOOM}
         maxBounds={CAMPUS_BOUNDS}
@@ -136,37 +267,8 @@ export default function CampusMap({ buildings, selectedBuilding, isMobile, overv
         />
         <ZoomControl position="bottomright" zoomInTitle="地図を拡大" zoomOutTitle="地図を縮小" />
         <MapView selectedBuilding={selectedBuilding} isMobile={isMobile} overviewRequest={overviewRequest} />
+        <MapBuildings buildings={buildings} selectedBuilding={selectedBuilding} isMobile={isMobile} onSelectBuilding={onSelectBuilding} />
         <MapLocation isMobile={isMobile} />
-        {buildings.map(building => {
-          const selected = building.id === selectedBuilding?.id
-          return (
-            <Marker
-              key={building.id}
-              position={[building.latitude, building.longitude]}
-              icon={getBuildingMarkerIcon(selected)}
-              title={building.name}
-              zIndexOffset={selected ? 1000 : 0}
-              eventHandlers={{ click: () => onSelectBuilding(building) }}
-            >
-              {selected && (
-                <Tooltip
-                  permanent
-                  direction={isMobile ? 'top' : 'right'}
-                  offset={isMobile ? [0, -24] : [23, 0]}
-                  opacity={1}
-                  className="building-label"
-                >
-                  <strong>{building.name}</strong>
-                  <div>
-                    コンセント設備：合計 {
-                      building.rooms.reduce((total, room) => total + room.outlets.length, 0)
-                    } 件
-                  </div>
-                </Tooltip>
-              )}
-            </Marker>
-          )
-        })}
       </MapContainer>
     </section>
   )

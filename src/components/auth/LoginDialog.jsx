@@ -58,6 +58,7 @@ function authErrorMessage(error, action, mode) {
 function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNotice }) {
   const emailInputId = useId()
   const codeInputId = useId()
+  const titleRef = useRef(null)
 
   const [email, setEmail] = useState(readRememberedEmail)
   const [mode, setMode] = useState(initialMode)
@@ -278,12 +279,13 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
   return (
     <Dialog.Popup
       className="login-dialog"
+      initialFocus={titleRef}
       finalFocus={() => returnFocusRef.current?.isConnected
         ? returnFocusRef.current
         : document.querySelector('.auth-button')}
     >
         <div className="login-dialog-header">
-          <Dialog.Title>{step === 'code' ? '認証コードを入力' : mode === 'signup' ? '新規登録' : 'ログイン'}</Dialog.Title>
+          <Dialog.Title ref={titleRef} tabIndex={-1}>{step === 'code' ? '認証コードを入力' : mode === 'signup' ? '新規登録' : 'ログイン'}</Dialog.Title>
           <Dialog.Close
             type="button"
             className="login-close"
@@ -313,7 +315,7 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
         {step === 'email' ? (
           <form className="login-form" onSubmit={handleSend}>
             {mode === 'signup' && (
-              <NicknameField value={nickname} onChange={setNickname} disabled={busy} autoFocus />
+              <NicknameField value={nickname} onChange={setNickname} disabled={busy} />
             )}
             <label htmlFor={emailInputId}>大学のメールアドレス</label>
             <input
@@ -325,7 +327,6 @@ function LoginDialogContent({ initialMode, onClose, returnFocusRef, onPasskeyNot
               onChange={event => setEmail(event.target.value)}
               disabled={busy}
               required
-              autoFocus={mode === 'login'}
             />
             <label className="login-remember">
               <input

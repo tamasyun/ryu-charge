@@ -131,6 +131,31 @@
   color: #fff;
 }
 
+.building-marker:focus-visible,
+.location-marker:focus-visible {
+  outline: 3px solid var(--map-action-text);
+  outline-offset: 3px;
+}
+
+.campus-map .location-marker {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  pointer-events: none;
+}
+
+.location-dot {
+  box-sizing: border-box;
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--map-blue);
+  box-shadow: 0 0 0 6px rgb(0 101 207 / 18%), 0 1px 4px rgb(0 0 0 / 25%);
+}
+
 .campus-map .building-label {
   border: 1px solid var(--panel-building-line);
   border-radius: 9px;
@@ -144,17 +169,14 @@
 
 @media (max-width: 760px) {
   .campus-map {
-    --map-controls-bottom: calc(var(--sheet-height) + var(--map-bottom) + 10px);
+    --map-controls-bottom: calc(var(--map-bottom) + var(--map-sheet-height, var(--sheet-height)) + 10px);
   }
 
+  .sheet-collapsed .campus-map { --map-controls-bottom: var(--map-bottom); }
   .sheet-expanded .campus-map :is(.leaflet-control-zoom, .map-location) { display: none; }
 }
 
 @media (max-width: 760px) and (max-height: 560px) {
-  .campus-map {
-    --map-controls-bottom: calc(var(--sheet-height) + var(--map-bottom) + 6px);
-  }
-
   .campus-map .leaflet-control-zoom { display: flex; }
   .campus-map .leaflet-control-zoom a:first-child {
     border-right: 1px solid var(--panel-room-line);
