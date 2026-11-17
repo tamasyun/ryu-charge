@@ -43,6 +43,9 @@ function App() {
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
+  // PC版パネルの開閉状態
+  const [isDesktopOpen, setIsDesktopOpen] = useState(true)
+
   const [user, setUser] = useState(null)
   const [authReady, setAuthReady] = useState(false)
   const [isLoginOpen, setIsLoginOpen] = useState(false)
@@ -188,7 +191,6 @@ function App() {
       }
     }
     initialize()
-    // デモも最新の公開情報を取り込み続け、端末内の追加だけを重ねる。
     function refresh() {
       if (document.visibilityState === 'hidden') return
       initialize()
@@ -205,7 +207,6 @@ function App() {
     }
   }, [user?.id, isDemo])
 
-  // 選択中の建物に属する教室の写真URLを取得する。
   const selectedRoomIdsKey = selectedBuilding?.rooms.map(room => room.id).join('|') ?? ''
   useEffect(() => {
     let active = true
@@ -223,18 +224,17 @@ function App() {
     return () => { active = false }
   }, [selectedBuildingId, selectedRoomIdsKey, roomPhotosVersion, user?.id])
 
-  // 別タブで開く認証リンクでも、URLから操作を再開する。
   useEffect(() => {
     const intent = redirectIntent ?? loginIntent
     if (!canPost || !intent || buildings.length === 0) return
 
-    // 認証と建物データが揃ってから、元の画面を復元する。
     const frame = requestAnimationFrame(() => {
       const building = buildings.find(b => b.id === intent.buildingId)
       if (building) {
         setSelectedBuildingId(building.id)
         setFormMode(building.rooms.length ? 'outlet' : 'room')
         setErrorMessage('')
+        setIsDesktopOpen(true)
         if (intent.type === 'review' && building.rooms.some(r => r.id === intent.roomId)) {
           setSelectedRoomId(intent.roomId)
           setDetailView('write')
@@ -255,6 +255,7 @@ function App() {
     return () => cancelAnimationFrame(frame)
   }, [canPost, buildings, redirectIntent, loginIntent])
 
+  // ★ マップ上のピンを押したときの処理：直接その建物の教室情報を開く
   function selectBuilding(building) {
     setSelectedBuildingId(building.id)
     setDetailView('details')
@@ -263,6 +264,7 @@ function App() {
     setIsFormOpen(false)
     setErrorMessage('')
     setSheetSnapIndex(1)
+    setIsDesktopOpen(true) // パネルを確実に開いて表示
   }
 
   function closeDetails() {
@@ -277,6 +279,18 @@ function App() {
     closeDetails()
     setErrorMessage('')
     setOverviewRequest(request => request + 1)
+    setIsDesktopOpen(true)
+  }
+
+  // ★ 「☰ 一覧を表示」ボタンを押したときの処理：前回の状態をクリアして必ず建物一覧を開く
+  function handleOpenBuildingList() {
+    setSelectedBuildingId(null)
+    setSelectedRoomId(null)
+    setDetailView('details')
+    setIsFormOpen(false)
+    setErrorMessage('')
+    setSheetSnapIndex(1)
+    setIsDesktopOpen(true)
   }
 
   async function handleAdd(event) {
@@ -434,6 +448,7 @@ function App() {
               setDetailView('reviews')
               setSheetSnapIndex(2)
             }}
+            onBackToBuildings={closeDetails}
           />
         )}
       </>
@@ -543,7 +558,7 @@ function App() {
       </div>
 
       <main
-        className={`map-layout${sheetSnapIndex === 2 ? ' sheet-expanded' : ''}${isMobile && !selectedBuilding && sheetSnapIndex === 0 ? ' sheet-collapsed' : ''}`}
+        className={`map-layout${sheetSnapIndex === 2 ? ' sheet-expanded' : ''}${isMobile && !selectedBuilding && sheetSnapIndex === 0 ? ' sheet-collapsed' : ''}${!isMobile && !isDesktopOpen ? ' desktop-panel-collapsed' : ''}`}
         style={isMobile ? { '--sheet-height': sheetHeight } : undefined}
       >
         <CampusMap
@@ -564,6 +579,9 @@ function App() {
           onClose={closeDetails}
           overviewRequest={overviewRequest}
           footer={selectedBuilding && renderDetailFooter()}
+          isDesktopOpen={isDesktopOpen}
+          onOpenDesktop={handleOpenBuildingList}
+          onCloseDesktop={() => setIsDesktopOpen(false)}
         >
           {selectedBuilding ? renderDetailBody() : (
             <ul className="building-list">

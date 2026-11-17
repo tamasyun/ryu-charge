@@ -13,6 +13,10 @@ export default function BuildingDetailsPanel({
   overviewRequest,
   children,
   footer,
+  // PC版の開閉状態と操作関数を受け取る
+  isDesktopOpen = true,
+  onOpenDesktop,
+  onCloseDesktop,
 }) {
   const titleId = useId()
   const titleRef = useRef(null)
@@ -38,7 +42,6 @@ export default function BuildingDetailsPanel({
     }
   }, [buildingId])
 
-  // 高さの変化だけを監視し、地図操作をシートの上に置く。
   useEffect(() => {
     const visibleArea = popupNode?.querySelector('.sheet-visible-area')
     const layout = document.querySelector('.map-layout')
@@ -56,20 +59,36 @@ export default function BuildingDetailsPanel({
     }
   }, [isMobile, popupNode])
 
+  // ✕ボタンを押したときの挙動
+  function handleCloseButtonClick() {
+    if (isMobile) {
+      if (building) onClose()
+      else onSnapIndexChange(0)
+    } else {
+      // ★ PC版：建物を選択中であっても、✕を押したらサイドバー自体を非表示にする
+      if (onCloseDesktop) {
+        onCloseDesktop()
+      } else if (building) {
+        onClose()
+      }
+    }
+  }
+
   const header = (
     <div className="detail-header">
       <div>
         <Title id={titleId} ref={titleRef} tabIndex={-1}>{title}</Title>
         {building && <p>{building.rooms.length}教室</p>}
       </div>
-      {(building || (isMobile && snapIndex > 0)) && (
-        <button
-          type="button"
-          className="close-button"
-          aria-label={building ? '詳細を閉じる' : '建物一覧を閉じる'}
-          onClick={building ? onClose : () => onSnapIndexChange(0)}
-        ><CloseIcon /></button>
-      )}
+      {/* PC版でも常に✕ボタンを表示 */}
+      <button
+        type="button"
+        className="close-button"
+        aria-label={building ? '詳細を閉じる' : '一覧を閉じる'}
+        onClick={handleCloseButtonClick}
+      >
+        <CloseIcon />
+      </button>
     </div>
   )
 
@@ -83,7 +102,45 @@ export default function BuildingDetailsPanel({
     </Content>
   )
 
+  // ----------------------------------------------------
+  // PC（デスクトップ）表示
+  // ----------------------------------------------------
   if (!isMobile) {
+    // ✕を押して閉じている時は、左上に3本線（ハンバーガー）ボタンを表示
+    if (!isDesktopOpen) {
+      return (
+        <button
+          type="button"
+          className="desktop-menu-button"
+          aria-label="一覧を開く"
+          onClick={onOpenDesktop}
+          style={{
+            position: 'absolute',
+            top: '76px',
+            left: '16px',
+            zIndex: 1000,
+            background: 'var(--bg, #ffffff)',
+            border: '1px solid var(--border, #e5e7eb)',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: 'var(--text-h, #111827)'
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" aria-hidden="true">
+            <path d="M5 7h14M5 12h14M5 17h14" strokeLinecap="round" />
+          </svg>
+          <span>一覧を表示</span>
+        </button>
+      )
+    }
+
     return (
       <aside className="detail-panel desktop-detail-panel" aria-labelledby={titleId}>
         {header}
@@ -93,6 +150,9 @@ export default function BuildingDetailsPanel({
     )
   }
 
+  // ----------------------------------------------------
+  // スマートフォン表示
+  // ----------------------------------------------------
   if (collapsed) {
     return (
       <button
