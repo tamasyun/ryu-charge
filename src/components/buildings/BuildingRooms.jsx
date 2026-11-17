@@ -10,7 +10,7 @@ function reviewOverviewLabel(overview, buildingId, roomId) {
   if (overview.status === 'error') return '概要を取得できませんでした'
   const summary = overview.byRoom[roomId]
   if (!summary) return 'まだレビューはありません'
-  return `★ ${(summary.ratingTotal / summary.count).toFixed(1)} ／ 5 ・ ${summary.count}件`
+  return `★ ${(summary.ratingTotal / summary.count).toFixed(1)} ・ レビュー${summary.count}件`
 }
 
 export default function BuildingRooms({
