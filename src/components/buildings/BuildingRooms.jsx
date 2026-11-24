@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState } from 'react'
+import BuildingDataForm from './BuildingDataForm'
+import { roomEditDeadline } from '../../utils/roomEditDeadline.js'
 import PhotoViewer from '../photos/PhotoViewer'
 import { IMAGE_ACCEPT } from '../../utils/imageProcessor.js'
 import { authorLabel } from '../../utils/nickname'
@@ -12,18 +15,196 @@ function reviewOverviewLabel(overview, buildingId, roomId) {
   return `★ ${(summary.ratingTotal / summary.count).toFixed(1)} ・ レビュー${summary.count}件`
 }
 
+function RecordActions({ label, disabled, onEdit, onDelete }) {
+  return (
+    <div className="record-actions">
+      <button type="button" aria-label={`${label}を編集`} disabled={disabled} onClick={onEdit}>編集</button>
+      <button type="button" aria-label={`${label}を削除`} disabled={disabled} onClick={onDelete}>削除</button>
+    </div>
+  )
+}
+
+function RoomDetails({
+  building, room, roomPhotos = {}, canPost, userId, uploadingRoomId, photoProgress,
+  onAddPhotos, reviews, isWritingReview, onBack, onChangeRecord, onStartEdit,
+}) {
+  const [editing, setEditing] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [currentTime, setCurrentTime] = useState(Date.now)
+  const changeLock = useRef(false)
+  const isRoomOwner = Boolean(userId && room.user_id === userId)
+  const deadline = roomEditDeadline(room.created_at)
+  const canManageRoom = isRoomOwner && deadline > currentTime
+
+  useEffect(() => {
+    if (!canManageRoom) return
+    const timer = window.setTimeout(() => setCurrentTime(deadline), deadline - Date.now())
+    return () => window.clearTimeout(timer)
+  }, [canManageRoom, deadline])
+
+  function startEdit(table, id) {
+    setErrorMessage('')
+    setEditing({ table, id })
+    onStartEdit?.()
+  }
+
+  async function changeRecord(table, id, changes = null) {
+    if (changeLock.current) return
+    const label = table === 'rooms' ? '教室' : 'コンセント'
+    if (!changes && !window.confirm(`この${label}を削除しますか？`)) return
+
+    changeLock.current = true
+    setSaving(true)
+    setErrorMessage('')
+    try {
+      await onChangeRecord(table, id, changes)
+      setEditing(null)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : `${label}を${changes ? '保存' : '削除'}できませんでした。`)
+    } finally {
+      changeLock.current = false
+      setSaving(false)
+    }
+  }
+
+  const photos = roomPhotos[room.id] ?? []
+  const isUploading = uploadingRoomId === room.id
+  const editRecord = editing?.table === 'rooms'
+    ? (canManageRoom ? room : null)
+    : room.outlets.find(outlet => outlet.id === editing?.id && outlet.user_id === userId)
+  const message = errorMessage && <p className="review-error" role="alert">{errorMessage}</p>
+
+  if (editRecord) {
+    return (
+      <>
+        {message}
+        <BuildingDataForm
+          building={building}
+          formMode={editing.table === 'rooms' ? 'room' : 'outlet'}
+          record={editing.table === 'rooms' ? editRecord : { ...editRecord, room_id: room.id }}
+          onSubmit={fields => changeRecord(editing.table, editRecord.id, fields)}
+          onCancel={() => {
+            setEditing(null)
+            setErrorMessage('')
+          }}
+          saving={saving}
+        />
+      </>
+    )
+  }
+
+  return (
+    <div className="room-detail-view">
+      {/* 一覧に戻るボタン */}
+      <button
+        type="button"
+        className="review-back"
+        onClick={onBack}
+        style={{ marginBottom: '12px' }}
+      >
+        ← 教室一覧に戻る
+      </button>
+
+      <section className="room-detail" style={{ borderTop: 'none', paddingTop: 0 }}>
+        <h3>
+          {room.name}
+          {room.floor != null ? `（${room.floor}階）` : ''}
+          <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
+        </h3>
+        <p>{room.location_detail}</p>
+        {message}
+        {isRoomOwner && Number.isFinite(deadline) && (
+          <p>
+            {canManageRoom ? (
+              <>編集・削除期限 <time dateTime={new Date(deadline).toISOString()}>
+                {new Date(deadline).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Tokyo' })}
+              </time></>
+            ) : '教室の編集・削除期限は終了しました。'}
+          </p>
+        )}
+        {canManageRoom && !isWritingReview && (
+          <RecordActions
+            label="教室"
+            disabled={saving}
+            onEdit={() => startEdit('rooms', room.id)}
+            onDelete={() => changeRecord('rooms', room.id)}
+          />
+        )}
+
+        <div className="room-photo-section">
+          <div className="room-photo-list" role="group" aria-label={`${room.name}の写真`} data-base-ui-swipe-ignore>
+            <PhotoViewer
+              photos={photos.map(photo => ({
+                id: photo.id,
+                src: photo.image_url,
+                alt: `${room.name}のコンセント・教室の写真`,
+              }))}
+              className="room-photo-item"
+              imageClassName="room-photo"
+            />
+            {canPost && (
+              <label className={`room-photo-add ${uploadingRoomId != null ? 'is-disabled' : ''}`}>
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                  <path d="M14 5h-3l-2 3H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="12" cy="13" r="3" />
+                  <path d="M19 2v6m-3-3h6" strokeLinecap="round" />
+                </svg>
+                <span>{isUploading ? '追加中...' : '写真を追加'}</span>
+                <input
+                  type="file"
+                  aria-label={`${room.name}に写真を追加`}
+                  accept={IMAGE_ACCEPT}
+                  multiple
+                  disabled={uploadingRoomId != null}
+                  onChange={event => {
+                    const files = Array.from(event.target.files ?? [])
+                    if (files.length > 0) onAddPhotos(room.id, files)
+                    event.target.value = ''
+                  }}
+                />
+              </label>
+            )}
+          </div>
+          {isUploading && photoProgress && (
+            <p role="status">
+              {photoProgress.phase === 'processing' ? '写真を変換中' : photoProgress.phase === 'saving' ? '写真を保存中' : 'アップロード中'}
+              ... {photoProgress.current} / {photoProgress.total}枚
+            </p>
+          )}
+        </div>
+
+        {room.outlets.length === 0 ? (
+          <p>コンセントは未登録です。</p>
+        ) : (
+          <ul>
+            {room.outlets.map(outlet => (
+              <li key={outlet.id}>
+                <strong>{outlet.location_detail}</strong>
+                <div>
+                  <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
+                  <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
+                </div>
+                {userId && outlet.user_id === userId && !isWritingReview && (
+                  <RecordActions
+                    label="コンセント"
+                    disabled={saving}
+                    onEdit={() => startEdit('outlets', outlet.id)}
+                    onDelete={() => changeRecord('outlets', outlet.id)}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {reviews}
+    </div>
+  )
+}
+
 export default function BuildingRooms({
-  building,
-  selectedRoom: room,
-  onSelectRoom,
-  reviewOverview,
-  roomPhotos = {},
-  canPost,
-  uploadingRoomId,
-  photoProgress,
-  onAddPhotos,
-  reviews,
-  onBackToBuildings, // ★ 建物一覧に戻る関数を追加
+  building, selectedRoom, onSelectRoom, reviewOverview, onBackToBuildings, ...roomDetails
 }) {
   if (building.rooms.length === 0) {
     return (
@@ -43,99 +224,18 @@ export default function BuildingRooms({
     )
   }
 
-  // ----------------------------------------------------
-  // ① 教室が選択されている場合：その教室の詳細だけを表示
-  // ----------------------------------------------------
-  if (room) {
-    const photos = roomPhotos[room.id] ?? []
-    const isUploading = uploadingRoomId === room.id
-
+  if (selectedRoom) {
     return (
-      <div className="room-detail-view">
-        {/* 一覧に戻るボタン */}
-        <button
-          type="button"
-          className="review-back"
-          onClick={() => onSelectRoom(null)}
-          style={{ marginBottom: '12px' }}
-        >
-          ← 教室一覧に戻る
-        </button>
-
-        <section className="room-detail" style={{ borderTop: 'none', paddingTop: 0 }}>
-          <h3>
-            {room.name}
-            {room.floor != null ? `（${room.floor}階）` : ''}
-            <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
-          </h3>
-          <p>{room.location_detail}</p>
-
-          <div className="room-photo-section">
-            <div className="room-photo-list" role="group" aria-label={`${room.name}の写真`} data-base-ui-swipe-ignore>
-              <PhotoViewer
-                photos={photos.map(photo => ({
-                  id: photo.id,
-                  src: photo.image_url,
-                  alt: `${room.name}のコンセント・教室の写真`,
-                }))}
-                className="room-photo-item"
-                imageClassName="room-photo"
-              />
-              {canPost && (
-                <label className={`room-photo-add ${uploadingRoomId != null ? 'is-disabled' : ''}`}>
-                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                    <path d="M14 5h-3l-2 3H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="12" cy="13" r="3" />
-                    <path d="M19 2v6m-3-3h6" strokeLinecap="round" />
-                  </svg>
-                  <span>{isUploading ? '追加中...' : '写真を追加'}</span>
-                  <input
-                    type="file"
-                    aria-label={`${room.name}に写真を追加`}
-                    accept={IMAGE_ACCEPT}
-                    multiple
-                    disabled={uploadingRoomId != null}
-                    onChange={event => {
-                      const files = Array.from(event.target.files ?? [])
-                      if (files.length > 0) onAddPhotos(room.id, files)
-                      event.target.value = ''
-                    }}
-                  />
-                </label>
-              )}
-            </div>
-            {isUploading && photoProgress && (
-              <p role="status">
-                {photoProgress.phase === 'processing' ? '写真を変換中' : photoProgress.phase === 'saving' ? '写真を保存中' : 'アップロード中'}
-                ... {photoProgress.current} / {photoProgress.total}枚
-              </p>
-            )}
-          </div>
-
-          {room.outlets.length === 0 ? (
-            <p>コンセントは未登録です。</p>
-          ) : (
-            <ul>
-              {room.outlets.map(outlet => (
-                <li key={outlet.id}>
-                  <strong>{outlet.location_detail}</strong>
-                  <div>
-                    <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
-                    <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-        {reviews}
-      </div>
+      <RoomDetails
+        key={selectedRoom.id}
+        building={building}
+        room={selectedRoom}
+        onBack={() => onSelectRoom(null)}
+        {...roomDetails}
+      />
     )
   }
 
-  // ----------------------------------------------------
-  // ② 教室が選択されていない場合：スッキリした教室一覧リストを表示
-  // ----------------------------------------------------
   return (
     <div className="room-selector-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '6px 0' }}>
       {/* ★ 建物一覧に戻るボタン */}

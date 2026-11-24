@@ -89,6 +89,71 @@ test('first browser login automatically registers a working passkey; reload and 
   } finally { await browser.close() }
 })
 
+for (const [label, browserType, viewport] of [
+  ['Chrome desktop', chromium, { width: 1280, height: 850 }],
+  ['WebKit mobile', webkit, { width: 393, height: 852 }],
+]) {
+  test(`${label}: building details let demo users edit and delete their own room and outlet posts`, async () => {
+    const browser = await browserType.launch()
+    try {
+      const { page, writes } = await setup(browser, viewport)
+      await page.getByRole('button', { name: 'テスト棟', exact: true }).last().click()
+      await page.getByRole('button', { name: '＋ 追加', exact: true }).click()
+      await page.getByLabel('追加するもの').selectOption('room')
+      await page.getByLabel('教室名').fill('自分の教室')
+      await page.getByRole('button', { name: '追加する', exact: true }).click()
+      await page.getByRole('button', { name: /^自分の教室/ }).click()
+      await page.getByText('編集・削除期限', { exact: false }).waitFor()
+      await page.getByRole('button', { name: 'レビューを投稿' }).click()
+      assert.equal(await page.getByRole('button', { name: '教室を編集' }).count(), 0)
+      await page.getByRole('button', { name: '投稿をキャンセル' }).click()
+      await page.getByRole('button', { name: '教室を編集' }).click()
+      assert.equal(await page.getByLabel('教室名').inputValue(), '自分の教室')
+      await page.getByLabel('教室名').fill('編集した教室')
+      await page.getByRole('button', { name: '保存する', exact: true }).click()
+      await page.getByRole('heading', { name: /^編集した教室/ }).waitFor()
+
+      await page.getByRole('button', { name: '＋ 追加', exact: true }).click()
+      await page.getByLabel('追加するもの').selectOption('outlet')
+      await page.getByLabel('教室 *', { exact: true }).selectOption({ label: '編集した教室' })
+      await page.getByLabel('コンセントの位置').fill('自分のコンセント')
+      await page.getByRole('button', { name: '追加する', exact: true }).click()
+      await page.getByRole('heading', { name: /^編集した教室/ }).waitFor()
+      await page.getByRole('button', { name: '教室を削除' }).click()
+      await page.getByRole('alert').filter({ hasText: '登録されている教室は削除できません' }).waitFor()
+      await page.getByRole('button', { name: 'コンセントを編集' }).click()
+      assert.equal(await page.getByLabel('コンセントの位置').inputValue(), '自分のコンセント')
+      await page.getByLabel('コンセントの位置').fill('編集したコンセント')
+      await page.getByLabel('AC差込口数').fill('0')
+      await page.getByRole('button', { name: '保存する', exact: true }).click()
+      await page.getByText('編集したコンセント', { exact: true }).waitFor()
+      await page.getByText('AC 0口', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'コンセントを削除' }).click()
+      await page.getByText('コンセントは未登録です。', { exact: true }).waitFor()
+      await page.getByRole('button', { name: '教室を削除' }).click()
+      await page.getByRole('button', { name: /^公開教室/ }).click()
+      await page.getByText('公開レビュー', { exact: true }).waitFor()
+      assert.equal(await page.getByRole('button', { name: '教室を編集' }).count(), 0)
+
+      await page.evaluate(() => {
+        const key = 'ryu-charge:demo:v1'
+        const data = JSON.parse(localStorage.getItem(key))
+        data.rooms.push({ id: 'expired', building_id: 'b1', name: '期限切れ教室',
+          user_id: data.userId, created_at: '2020-01-01T00:00:00Z' })
+        localStorage.setItem(key, JSON.stringify(data))
+        window.dispatchEvent(new Event('focus'))
+      })
+      await page.getByRole('button', { name: '← 教室一覧に戻る' }).click()
+      await page.getByRole('button', { name: /^期限切れ教室/ }).click()
+      await page.getByText('教室の編集・削除期限は終了しました。').waitFor()
+      assert.equal(await page.getByRole('button', { name: /^教室を(編集|削除)$/ }).count(), 0)
+      assert.deepEqual(writes, [])
+    } finally {
+      await browser.close()
+    }
+  })
+}
+
 test('blank-email login explains when first demo passkey registration did not complete', async () => {
   const browser = await chromium.launch()
   try {

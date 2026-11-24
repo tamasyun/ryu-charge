@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { appAuth } from './lib/supabase'
 import { demoAccount } from './demo/account.js'
-import { createRoom, createOutlet, fetchBuildings } from './services/buildings'
+import { changeBuildingRecord, createRoom, createOutlet, fetchBuildings } from './services/buildings'
 import { fetchRoomPhotos, uploadRoomPhotos } from './services/RoomPhotos.js'
 import { isUniversityEmail } from './utils/universityEmail'
 import { readRedirectIntent, clearRedirectIntent } from './utils/authRedirect'
 import { useMediaQuery } from './hooks/useMediaQuery'
 import { useReviewOverview } from './hooks/useReviewOverview'
 import { useAccount } from './hooks/useAccount'
-import AddDataForm from './components/buildings/AddDataForm'
+import BuildingDataForm from './components/buildings/BuildingDataForm'
 import BuildingRooms from './components/buildings/BuildingRooms'
 import BuildingDetailsPanel from './components/buildings/BuildingDetailsPanel'
 import CampusMap from './components/map/CampusMap'
@@ -64,7 +64,9 @@ function App() {
   const [photoProgress, setPhotoProgress] = useState(null)
   const [roomPhotosVersion, setRoomPhotosVersion] = useState(0)
   const photoUploadLock = useRef(false)
+  const addDataLock = useRef(false)
   const accountIdentityRef = useRef(null)
+  const buildingRequestRef = useRef(0)
 
   const { profile, status: profileStatus, reloadProfile, updateProfile } = useAccount(user)
   const isDemo = demoAccount.isUser(user)
@@ -144,6 +146,15 @@ function App() {
     setReviewVersion(value => value + 1)
   }
 
+  const loadBuildings = useCallback(async (isActive = () => true) => {
+    const identity = accountIdentityRef.current
+    const request = ++buildingRequestRef.current
+    const data = await fetchBuildings()
+    if (identity === accountIdentityRef.current && request === buildingRequestRef.current && isActive()) {
+      setBuildings(data)
+    }
+  }, [])
+
   function handleAccountDeleted(confirmed = true) {
     setUser(null)
     setIsAccountOpen(false)
@@ -172,18 +183,11 @@ function App() {
     }
   }
 
-  async function loadBuildings() {
-    const identity = accountIdentityRef.current
-    const data = await fetchBuildings()
-    if (identity === accountIdentityRef.current) setBuildings(data)
-  }
-
   useEffect(() => {
     let active = true
     async function initialize() {
       try {
-        const buildings = await fetchBuildings()
-        if (active) setBuildings(buildings)
+        await loadBuildings(() => active)
       } catch (error) {
         if (active) setErrorMessage(error instanceof Error ? error.message : '建物を取得できませんでした。')
       }
@@ -202,7 +206,7 @@ function App() {
       if (timer) window.clearInterval(timer)
       window.removeEventListener('focus', refresh)
     }
-  }, [user?.id, isDemo])
+  }, [user?.id, isDemo, loadBuildings])
 
   const selectedRoomIdsKey = selectedBuilding?.rooms.map(room => room.id).join('|') ?? ''
   useEffect(() => {
@@ -290,69 +294,40 @@ function App() {
     setIsDesktopOpen(true)
   }
 
-  async function handleAdd(event) {
-    event.preventDefault()
-    if (!selectedBuilding || saving) return
+  async function refreshBuildingData() {
+    try {
+      await loadBuildings()
+    } catch {
+      setErrorMessage('変更を保存しました。最新の情報を表示するにはページを再読み込みしてください。')
+    }
+  }
+
+  async function handleChangeBuildingRecord(table, id, changes) {
+    await changeBuildingRecord(table, id, changes)
+    await refreshBuildingData()
+  }
+
+  async function handleAdd(fields) {
+    if (!selectedBuilding || addDataLock.current) return
     if (!canPost) {
       setIsFormOpen(false)
       openLogin({ type: 'add', buildingId: selectedBuilding.id })
       return
     }
 
-    const form = new FormData(event.currentTarget)
-    const text = name => String(form.get(name) ?? '').trim()
-    let createRecord
-    let record
-
-    if (formMode === 'room') {
-      const floorText = text('floor')
-      const floor = floorText === '' ? null : Number(floorText)
-      if (!text('name') ||
-          text('name').length > 80 ||
-          text('location_detail').length > 300 ||
-          (floor !== null &&
-            (!Number.isInteger(floor) || floor < -10 || floor > 40))) {
-        setErrorMessage('教室の入力内容を確認してください。')
-        return
-      }
-      createRecord = createRoom
-      record = {
-        id: `room-${crypto.randomUUID()}`,
-        building_id: selectedBuilding.id,
-        name: text('name'),
-        floor,
-        location_detail: text('location_detail'),
-      }
-    } else {
-      const roomId = text('room_id')
-      const portsText = text('ac_ports')
-      const ports = portsText === '' ? null : Number(portsText)
-      if (!selectedBuilding.rooms.some(r => r.id === roomId) ||
-          !text('location_detail') ||
-          text('location_detail').length > 300 ||
-          (ports !== null &&
-            (!Number.isInteger(ports) || ports < 0 || ports > 50))) {
-        setErrorMessage('コンセントの入力内容を確認してください。')
-        return
-      }
-      createRecord = createOutlet
-      record = {
-        id: `outlet-${crypto.randomUUID()}`,
-        room_id: roomId,
-        location_detail: text('location_detail'),
-        ac_ports: ports,
-      }
-    }
-
+    addDataLock.current = true
     setSaving(true)
     setErrorMessage('')
     try {
-      await createRecord(record)
-      await loadBuildings()
+      const record = { id: `${formMode}-${crypto.randomUUID()}`, ...fields }
+      if (formMode === 'room') await createRoom({ ...record, building_id: selectedBuilding.id })
+      else await createOutlet(record)
+      await refreshBuildingData()
       setIsFormOpen(false)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '追加できませんでした。')
     } finally {
+      addDataLock.current = false
       setSaving(false)
     }
   }
@@ -402,7 +377,7 @@ function App() {
   function renderDetailBody() {
     if (isFormOpen && canPost) {
       return (
-        <AddDataForm
+        <BuildingDataForm
           building={selectedBuilding}
           formMode={formMode}
           onFormModeChange={setFormMode}
@@ -423,6 +398,10 @@ function App() {
         reviewOverview={reviewOverview}
         roomPhotos={roomPhotos}
         canPost={canPost}
+        userId={user?.id}
+        onChangeRecord={handleChangeBuildingRecord}
+        onStartEdit={() => setSheetSnapIndex(2)}
+        isWritingReview={isReviewFormOpen}
         uploadingRoomId={uploadingRoomId}
         photoProgress={photoProgress}
         onAddPhotos={handleAddRoomPhotos}
@@ -463,7 +442,10 @@ function App() {
       }
       return
     }
-    if (!isFormOpen) setSheetSnapIndex(2)
+    if (!isFormOpen) {
+      if (!selectedBuilding.rooms.length) setFormMode('room')
+      setSheetSnapIndex(2)
+    }
     setIsFormOpen(open => !open)
   }
 
@@ -473,7 +455,7 @@ function App() {
         <button
           type="button"
           className="add-button"
-          disabled={profileStatus === 'loading'}
+          disabled={saving || profileStatus === 'loading'}
           onClick={handleToggleAdd}
         >
           {!hasUniversityEmail ? '追加できません' : profileStatus === 'loading' ? '確認中...' : needsNickname ? 'ニックネームを設定' : isFormOpen ? 'キャンセル' : '＋ 追加'}
