@@ -28,7 +28,7 @@ export default function SecurityChallenge({ siteKey, widgetRef, onTokenChange })
 
   return <div className="login-captcha" ref={containerRef}>
     <Turnstile ref={widgetRef} siteKey={siteKey}
-      options={{ language: 'ja', size, responseField: false, retry: 'auto', refreshExpired: 'auto', refreshTimeout: 'auto' }}
+      options={{ theme: 'light', language: 'ja', size, responseField: false, retry: 'auto', refreshExpired: 'auto', refreshTimeout: 'auto' }}
       onWidgetLoad={invalidateToken}
       onSuccess={token => { onTokenChange(token); setError('') }}
       // 再試行・期限切れの案内はウィジェットに任せ、古いトークンだけ無効にする。
