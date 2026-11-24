@@ -22,7 +22,7 @@ export async function changeBuildingRecord(table, id, changes = null) {
   const { data, error } = await request.eq('id', id).select('id')
 
   if (!changes && table === 'rooms' && error?.code === '23503') {
-    throw new Error('コンセント・レビュー・写真が登録されている教室は削除できません。')
+    throw new Error('利用条件・コンセント・レビュー・写真が登録されている教室は削除できません。')
   }
   if (error) throw error
   if (data?.length !== 1 || data[0].id !== id) {
