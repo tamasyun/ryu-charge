@@ -4,11 +4,11 @@ import { fetchReviews, deleteReview } from '../../services/reviews'
 import { appAuth } from '../../lib/supabase'
 import { authorLabel } from '../../utils/nickname'
 
-export default function ReviewList({ roomId, onDeleted, authorVersion }) {
+export default function ReviewList({ roomId, onDeleted, reviewVersion }) {
   const [result, setResult] = useState(null)
   const [revision, setRevision] = useState(0)
   const [currentUserId, setCurrentUserId] = useState(null)
-  const current = result?.roomId === roomId && result.revision === revision && result.authorVersion === authorVersion ? result : null
+  const current = result?.roomId === roomId && result.revision === revision && result.reviewVersion === reviewVersion ? result : null
   const reviews = current?.reviews ?? []
   const loading = !current
   const errorMessage = current?.errorMessage
@@ -24,12 +24,12 @@ export default function ReviewList({ roomId, onDeleted, authorVersion }) {
   useEffect(() => {
     let active = true
     fetchReviews(roomId).then(reviews => {
-      if (active) setResult({ roomId, revision, authorVersion, reviews })
+      if (active) setResult({ roomId, revision, reviewVersion, reviews })
     }).catch(() => {
-      if (active) setResult({ roomId, revision, authorVersion, reviews: [], errorMessage: 'レビューを取得できませんでした。' })
+      if (active) setResult({ roomId, revision, reviewVersion, reviews: [], errorMessage: 'レビューを取得できませんでした。' })
     })
     return () => { active = false }
-  }, [roomId, revision, authorVersion])
+  }, [roomId, revision, reviewVersion])
 
   // 自分のレビューを削除する処理
   async function handleDelete(reviewId) {
