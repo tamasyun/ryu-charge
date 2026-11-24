@@ -16,6 +16,7 @@ after(async () => { await server?.close() })
 async function mount(page, { review = false, mobile = false, gallery = false } = {}) {
   await page.route('**/src/services/reviews*', route => route.fulfill({ contentType: 'text/javascript', body: `
     export async function createReview() {}
+    export async function updateReview() {}
     export async function deleteReview() {}
     export async function fetchReviews() { return [{ id: 'review-1', rating: 5,
       created_at: '2026-11-07T00:00:00Z', image_url: '/tests/fixtures/oriented.png' }] }
@@ -159,7 +160,7 @@ test('broken photo shows a recoverable error and can still be closed', async () 
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage()
-    await page.route('**/src/services/reviews*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function createReview() {}' }))
+    await page.route('**/src/services/reviews*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function createReview() {} export async function updateReview() {}' }))
     await page.goto(`${baseURL}/tests/browser-harness.html`)
     await page.evaluate(async () => {
       const { React, createRoot } = await import('/tests/browser-harness.mjs')

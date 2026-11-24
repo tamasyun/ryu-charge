@@ -36,6 +36,9 @@
   cursor: pointer;
 }
 .review-form { display: flex; flex-direction: column; gap: 10px; }
+.review-form > .review-back { align-self: flex-start; margin-bottom: 2px; }
+.review-form h3 { margin: 0 0 6px; color: var(--text-h); font-size: 19px; }
+.review-form > .review-photo-thumbnail { align-self: flex-start; }
 .review-field-label, .review-form label { color: var(--text-h); font-size: 14px; font-weight: 600; }
 .rating-input { display: flex; gap: 3px; }
 .rating-input button { padding: 2px; border: 0; background: transparent; color: #9ca3af; font: inherit; font-size: 30px; cursor: pointer; }

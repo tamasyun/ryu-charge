@@ -13,6 +13,7 @@ import BuildingDataForm from './components/buildings/BuildingDataForm'
 import BuildingRooms from './components/buildings/BuildingRooms'
 import BuildingDetailsPanel from './components/buildings/BuildingDetailsPanel'
 import CampusMap from './components/map/CampusMap'
+import ReviewForm from './components/reviews/ReviewForm'
 import RoomReviews from './components/reviews/RoomReviews'
 import LoginDialog from './components/auth/LoginDialog'
 import ProfileDialog from './components/auth/ProfileDialog'
@@ -39,7 +40,7 @@ function App() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [formMode, setFormMode] = useState('outlet')
   const [selectedRoomId, setSelectedRoomId] = useState(null)
-  const [reviewFormRoomId, setReviewFormRoomId] = useState(null)
+  const [reviewEditor, setReviewEditor] = useState(null)
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -77,7 +78,7 @@ function App() {
     buildings.find(building => building.id === selectedBuildingId) ?? null
   const selectedRoom =
     selectedBuilding?.rooms.find(room => room.id === selectedRoomId) ?? null
-  const isReviewFormOpen = canPost && selectedRoom != null && selectedRoom.id === reviewFormRoomId
+  const isReviewFormOpen = canPost && reviewEditor != null && selectedRoom?.id === reviewEditor.roomId
   const reviewOverview = useReviewOverview(selectedBuilding, reviewVersion)
   const sheetSnapPoints = SHEET_SNAP_POINTS[selectedBuilding ? 'details' : 'list'][isLandscape ? 'landscape' : 'portrait']
   const sheetSnap = sheetSnapPoints[sheetSnapIndex]
@@ -114,7 +115,7 @@ function App() {
         accountIdentityRef.current = nextId
         setBuildings([])
         setRoomPhotos({})
-        setReviewFormRoomId(null)
+        setReviewEditor(null)
         setIsFormOpen(false)
         setIsAccountOpen(false)
         setReviewVersion(value => value + 1)
@@ -160,7 +161,7 @@ function App() {
     setIsAccountOpen(false)
     setIsFormOpen(false)
     setLoginIntent(null)
-    setReviewFormRoomId(null)
+    setReviewEditor(null)
     setAccountNotice(confirmed ? 'アカウントを削除しました。' : 'セッションが無効になりました。再ログインして削除状態を確認してください。')
     setReviewVersion(value => value + 1)
     setRoomPhotosVersion(value => value + 1)
@@ -238,12 +239,12 @@ function App() {
         setIsDesktopOpen(true)
         if (intent.type === 'review' && building.rooms.some(r => r.id === intent.roomId)) {
           setSelectedRoomId(intent.roomId)
-          setReviewFormRoomId(intent.roomId)
+          setReviewEditor({ roomId: intent.roomId, review: null })
           setIsFormOpen(false)
           setSheetSnapIndex(2)
         } else if (intent.type === 'add') {
           setSelectedRoomId(null)
-          setReviewFormRoomId(null)
+          setReviewEditor(null)
           setIsFormOpen(true)
           setSheetSnapIndex(2)
         }
@@ -259,7 +260,7 @@ function App() {
   // ★ マップ上のピンを押したときの処理：直接その建物の教室情報を開く
   function selectBuilding(building) {
     setSelectedBuildingId(building.id)
-    setReviewFormRoomId(null)
+    setReviewEditor(null)
     setSelectedRoomId(null)
     setFormMode(building.rooms.length ? 'outlet' : 'room')
     setIsFormOpen(false)
@@ -271,7 +272,7 @@ function App() {
   function closeDetails() {
     setSelectedBuildingId(null)
     setIsFormOpen(false)
-    setReviewFormRoomId(null)
+    setReviewEditor(null)
     setSelectedRoomId(null)
     setSheetSnapIndex(1)
   }
@@ -287,7 +288,7 @@ function App() {
   function handleOpenBuildingList() {
     setSelectedBuildingId(null)
     setSelectedRoomId(null)
-    setReviewFormRoomId(null)
+    setReviewEditor(null)
     setIsFormOpen(false)
     setErrorMessage('')
     setSheetSnapIndex(1)
@@ -374,7 +375,30 @@ function App() {
     setReviewVersion(version => version + 1)
   }
 
+  function openReviewEditor(review = null) {
+    setErrorMessage('')
+    setReviewEditor({ roomId: selectedRoom.id, review })
+    setSheetSnapIndex(2)
+  }
+
   function renderDetailBody() {
+    if (isReviewFormOpen) {
+      return (
+        <ReviewForm
+          key={reviewEditor.review?.id ?? selectedRoom.id}
+          roomId={selectedRoom.id}
+          roomName={selectedRoom.name}
+          review={reviewEditor.review}
+          canPost={canPost}
+          onCancel={() => setReviewEditor(null)}
+          onSubmitted={() => {
+            handleReviewsChanged()
+            setReviewEditor(current => current === reviewEditor ? null : current)
+          }}
+        />
+      )
+    }
+
     if (isFormOpen && canPost) {
       return (
         <BuildingDataForm
@@ -393,7 +417,7 @@ function App() {
         selectedRoom={selectedRoom}
         onSelectRoom={roomId => {
           setSelectedRoomId(roomId)
-          setReviewFormRoomId(null)
+          setReviewEditor(null)
         }}
         reviewOverview={reviewOverview}
         roomPhotos={roomPhotos}
@@ -401,7 +425,6 @@ function App() {
         userId={user?.id}
         onChangeRecord={handleChangeBuildingRecord}
         onStartEdit={() => setSheetSnapIndex(2)}
-        isWritingReview={isReviewFormOpen}
         uploadingRoomId={uploadingRoomId}
         photoProgress={photoProgress}
         onAddPhotos={handleAddRoomPhotos}
@@ -411,20 +434,12 @@ function App() {
             reviewVersion={reviewVersion}
             key={`${user?.id ?? 'guest'}-${selectedRoom.id}`}
             roomId={selectedRoom.id}
-            isWriting={isReviewFormOpen}
             canPost={canPost}
             authReady={authReady && profileStatus !== 'loading'}
             isLoggedIn={Boolean(user)}
-            onWrite={() => {
-              setReviewFormRoomId(selectedRoom.id)
-              setSheetSnapIndex(2)
-            }}
-            onCancel={() => setReviewFormRoomId(null)}
+            onWrite={() => openReviewEditor()}
+            onEdit={openReviewEditor}
             onLogin={handleReviewLogin}
-            onSubmitted={() => {
-              handleReviewsChanged()
-              setReviewFormRoomId(current => current === selectedRoom.id ? null : current)
-            }}
             onDeleted={handleReviewsChanged}
           />
         )}

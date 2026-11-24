@@ -4,7 +4,7 @@ import { fetchReviews, deleteReview } from '../../services/reviews'
 import { appAuth } from '../../lib/supabase'
 import { authorLabel } from '../../utils/nickname'
 
-export default function ReviewList({ roomId, onDeleted, reviewVersion }) {
+export default function ReviewList({ roomId, onEdit, onDeleted, reviewVersion }) {
   const [result, setResult] = useState(null)
   const [revision, setRevision] = useState(0)
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -68,23 +68,12 @@ export default function ReviewList({ roomId, onDeleted, reviewVersion }) {
               <time dateTime={review.created_at}>
                 {new Date(review.created_at).toLocaleDateString('ja-JP')}
               </time>
-              {/* 自分の投稿の場合のみ削除ボタンを表示 */}
+              {/* 自分の投稿だけ編集・削除できる。 */}
               {currentUserId && review.user_id === currentUserId && (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(review.id)}
-                  style={{
-                    background: 'transparent',
-                    border: 0,
-                    color: '#ef4444',
-                    fontSize: '11px',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    padding: 0
-                  }}
-                >
-                  削除
-                </button>
+                <div className="record-actions">
+                  {onEdit && <button type="button" onClick={() => onEdit(review)}>編集</button>}
+                  <button type="button" onClick={() => handleDelete(review.id)}>削除</button>
+                </div>
               )}
             </div>
           </div>

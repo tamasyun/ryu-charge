@@ -14,6 +14,7 @@ after(async () => { await browser?.close(); await server?.close() })
 test('review: processing disables submit, reselection/removal cannot restore stale previews, failures retry', async () => {
   const page = await browser.newPage()
   await page.route('**/src/services/reviews*', route => route.fulfill({ contentType: 'text/javascript', body: `
+    export async function updateReview() {}
     export async function createReview(record) {
       window.posts.push(record);
       if (window.failSave) throw new Error('DB保存に失敗しました');
@@ -71,7 +72,7 @@ test('review: processing disables submit, reselection/removal cannot restore sta
 
 test('room UI: accepts five HEIC files in selection order and announces progress', async () => {
   const page = await browser.newPage()
-  await page.route('**/src/services/reviews*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function createReview() {}' }))
+  await page.route('**/src/services/reviews*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function createReview() {} export async function updateReview() {}' }))
   await page.goto(`${baseURL}/tests/browser-harness.html`)
   await page.evaluate(async () => {
     const { createRoot, React, BuildingRooms } = await import('/tests/browser-harness.mjs')

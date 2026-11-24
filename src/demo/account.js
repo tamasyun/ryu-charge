@@ -154,6 +154,14 @@ export function createDemoAccount({
         : data[table].filter(item => item !== row)
       write({ ...data, [table]: rows })
     },
+    updateReview(id, { rating, comment }) {
+      const data = requireActive()
+      if (!data.reviews.some(row => row.id === id && row.user_id === data.userId)) {
+        throw new Error('自分が追加したレビューだけ編集できます。')
+      }
+      const reviews = data.reviews.map(row => row.id === id ? { ...row, rating, comment } : row)
+      write({ ...data, reviews })
+    },
     removeReview(id) {
       const data = requireActive()
       if (!data.reviews.some(row => row.id === id)) throw new Error('自分が追加したレビューだけ削除できます。')
