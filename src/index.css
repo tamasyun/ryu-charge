@@ -21,7 +21,7 @@
 
   font: 18px/1.55 var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: only light;
   /* 本文は基本色、補足情報は --text を使う。 */
   color: var(--text-h);
   background: var(--bg);
@@ -32,30 +32,6 @@
 
   @media (max-width: 1024px) {
     font-size: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  /* 暗い背景でも文字と境界線を見やすくする。 */
-  :root {
-    --text: #c6cbd4;
-    --text-h: #f9fafb;
-    --bg: #16171d;
-    --border: #4b4f5b;
-    --section-border: #73798a;
-    --error: #fca5a5;
-    --success: #86efac;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
   }
 }
 
