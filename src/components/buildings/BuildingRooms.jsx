@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import BuildingDataForm from './BuildingDataForm'
+import RoomAccessList from './RoomAccessList'
 import PostActionsMenu from '../PostActionsMenu'
 import { roomEditDeadline } from '../../utils/roomEditDeadline.js'
 import PhotoViewer from '../photos/PhotoViewer'
@@ -18,12 +19,13 @@ function reviewOverviewLabel(overview, buildingId, roomId) {
 
 function RoomDetails({
   building, room, roomPhotos = {}, canPost, userId, uploadingRoomId, photoProgress,
-  onAddPhotos, reviews, onBack, onChangeRecord, onStartEdit,
+  onAddPhotos, reviews, onBack, onChangeRecord, onStartEdit, loadAcademicUnits, loadRoomAccess,
 }) {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [currentTime, setCurrentTime] = useState(Date.now)
+  const [accessRevision, setAccessRevision] = useState(0)
   const changeLock = useRef(false)
   const isRoomOwner = Boolean(userId && room.user_id === userId)
   const deadline = roomEditDeadline(room.created_at)
@@ -35,15 +37,15 @@ function RoomDetails({
     return () => window.clearTimeout(timer)
   }, [canManageRoom, deadline])
 
-  function startEdit(table, id) {
+  function startEdit(table, id, record) {
     setErrorMessage('')
-    setEditing({ table, id })
+    setEditing({ table, id, record })
     onStartEdit?.()
   }
 
   async function changeRecord(table, id, changes = null) {
     if (changeLock.current) return
-    const label = table === 'rooms' ? '教室' : 'コンセント'
+    const label = { rooms: '教室', outlets: 'コンセント', room_access_posts: '教室の情報' }[table]
     if (!changes && !window.confirm(`この${label}を削除しますか？`)) return
 
     changeLock.current = true
@@ -51,6 +53,7 @@ function RoomDetails({
     setErrorMessage('')
     try {
       await onChangeRecord(table, id, changes)
+      if (table === 'room_access_posts') setAccessRevision(value => value + 1)
       setEditing(null)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : `${label}を${changes ? '保存' : '削除'}できませんでした。`)
@@ -62,8 +65,10 @@ function RoomDetails({
 
   const photos = roomPhotos[room.id] ?? []
   const isUploading = uploadingRoomId === room.id
-  const editRecord = editing?.table === 'rooms'
+  const editMode = { rooms: 'room', outlets: 'outlet', room_access_posts: 'room-access' }[editing?.table]
+  const editRecord = editMode === 'room'
     ? (canManageRoom ? room : null)
+    : editMode === 'room-access' ? editing.record
     : room.outlets.find(outlet => outlet.id === editing?.id && outlet.user_id === userId)
   const message = errorMessage && <p className="review-error" role="alert">{errorMessage}</p>
 
@@ -73,8 +78,9 @@ function RoomDetails({
         {message}
         <BuildingDataForm
           building={building}
-          formMode={editing.table === 'rooms' ? 'room' : 'outlet'}
-          record={editing.table === 'rooms' ? editRecord : { ...editRecord, room_id: room.id }}
+          formMode={editMode}
+          record={editMode === 'outlet' ? { ...editRecord, room_id: room.id } : editRecord}
+          loadAcademicUnits={loadAcademicUnits}
           onSubmit={fields => changeRecord(editing.table, editRecord.id, fields)}
           onCancel={() => {
             setEditing(null)
@@ -192,6 +198,17 @@ function RoomDetails({
               </li>
             ))}
           </ul>
+        )}
+        {loadRoomAccess && (
+          <RoomAccessList
+            roomId={room.id}
+            userId={userId}
+            loadRoomAccess={loadRoomAccess}
+            revision={accessRevision}
+            saving={saving}
+            onEdit={post => startEdit('room_access_posts', post.id, post)}
+            onDelete={id => changeRecord('room_access_posts', id)}
+          />
         )}
       </section>
       {reviews}

@@ -1,0 +1,105 @@
+.room-access-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 0 0;
+  border: 0;
+}
+
+.room-access-fieldset legend,
+.room-access-section h4 {
+  color: var(--text-h);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.add-form .room-access-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-weight: 400;
+}
+
+.add-form .room-access-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--map-blue);
+}
+
+.academic-unit-roots,
+.academic-unit-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.academic-unit-children {
+  margin-left: 7px;
+  padding-left: 12px;
+  border-left: 1px solid var(--panel-room-line);
+}
+
+.academic-unit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.academic-unit-expander {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.room-access-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+
+.room-access-times:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.room-access-section {
+  margin-top: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--panel-room-line);
+  overflow-wrap: anywhere;
+}
+
+.room-access-section h4 {
+  margin: 0 0 8px;
+}
+
+.room-access-section p {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.room-access-post {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.room-access-post + .room-access-post {
+  border-top: 1px solid var(--panel-outlet-line);
+}
+
+.room-access-post strong {
+  color: var(--text-h);
+  font-size: 14px;
+}

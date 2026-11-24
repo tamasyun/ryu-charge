@@ -1,44 +1,77 @@
 import { useEffect, useRef, useState } from 'react'
 import { demoAccount } from '../../demo/account.js'
+import { readRoomAccessFields } from '../../utils/roomAccess.js'
+import RoomAccessFields from './RoomAccessFields'
 
 function readFields(form, mode, rooms) {
   const text = name => String(form.get(name) ?? '').trim()
   const number = name => text(name) === '' ? null : Number(text(name))
   const validNumber = (value, min, max) =>
     value === null || (Number.isInteger(value) && value >= min && value <= max)
-  const location = text('location_detail')
-  if (location.length > 300) return null
   if (mode === 'room') {
     const name = text('name')
     const floor = number('floor')
-    if (!name || name.length > 80 || !validNumber(floor, -10, 40)) return null
+    const location = text('location_detail')
+    if (!name || name.length > 80 || location.length > 300 || !validNumber(floor, -10, 40)) return null
     return { name, floor, location_detail: location }
   }
 
   const roomId = text('room_id')
+  if (!rooms.some(room => room.id === roomId)) return null
+  if (mode === 'room-access') return readRoomAccessFields(form, roomId)
+
+  const location = text('location_detail')
   const ports = number('ac_ports')
-  if (!location || !rooms.some(room => room.id === roomId) || !validNumber(ports, 0, 50)) return null
+  if (!location || location.length > 300 || !validNumber(ports, 0, 50)) return null
   return { room_id: roomId, location_detail: location, ac_ports: ports }
 }
 
 export default function BuildingDataForm({
-  building, formMode, onFormModeChange, record, onSubmit, onCancel, saving,
+  building, formMode, onFormModeChange, record, defaultRoomId, onSubmit, onCancel, saving, loadAcademicUnits,
+  loadRegisteredRoomIds,
 }) {
   const [invalid, setInvalid] = useState(false)
+  const [availability, setAvailability] = useState(null)
+  const [availabilityAttempt, setAvailabilityAttempt] = useState(0)
   const titleRef = useRef(null)
   const recordId = record?.id
-  const label = formMode === 'room' ? '教室' : 'コンセント'
+  const label = { room: '教室', 'room-access': '教室の情報', outlet: 'コンセント' }[formMode]
+  const isRoomAccess = formMode === 'room-access'
+  const addingRoomAccess = isRoomAccess && !record
+  const roomIdsKey = JSON.stringify(building.rooms.map(room => room.id))
+  const roomAvailability = availability?.roomIdsKey === roomIdsKey ? availability : null
+  const checking = addingRoomAccess && roomAvailability?.attempt !== availabilityAttempt
+  const availableRooms = addingRoomAccess
+    ? building.rooms.filter(room => roomAvailability?.registered && !roomAvailability.registered.has(room.id))
+    : building.rooms
+  const showFields = !addingRoomAccess || availableRooms.length > 0
+  const preferredRoom = record?.room_id ?? defaultRoomId
 
   useEffect(() => {
     if (recordId) titleRef.current?.focus()
   }, [recordId])
 
-  function handleSubmit(event) {
+  useEffect(() => {
+    if (!addingRoomAccess) return
+    let active = true
+    loadRegisteredRoomIds(JSON.parse(roomIdsKey)).then(registered => {
+      if (active) setAvailability({ roomIdsKey, attempt: availabilityAttempt, registered })
+    }).catch(() => {
+      if (active) setAvailability({ roomIdsKey, attempt: availabilityAttempt, registered: null })
+    })
+    return () => { active = false }
+  }, [addingRoomAccess, roomIdsKey, availabilityAttempt, loadRegisteredRoomIds])
+
+  function recheckRoomAccess() {
+    setAvailabilityAttempt(value => value + 1)
+  }
+
+  async function handleSubmit(event) {
     event.preventDefault()
-    if (saving) return
-    const fields = readFields(new FormData(event.currentTarget), formMode, building.rooms)
+    if (saving || checking || !showFields) return
+    const fields = readFields(new FormData(event.currentTarget), formMode, availableRooms)
     setInvalid(!fields)
-    if (fields) onSubmit(fields)
+    if (fields && await onSubmit(fields) === false && addingRoomAccess) recheckRoomAccess()
   }
 
   return (
@@ -47,14 +80,29 @@ export default function BuildingDataForm({
       {!record && (
         <>
           <label htmlFor="form-mode">追加するもの</label>
-          <select id="form-mode" value={formMode} onChange={event => onFormModeChange(event.target.value)}>
+          <select id="form-mode" value={formMode} disabled={saving} onChange={event => {
+            setInvalid(false)
+            setAvailability(null)
+            onFormModeChange(event.target.value)
+          }}>
             <option value="room">教室</option>
+            <option value="room-access" disabled={!building.rooms.length}>教室の情報</option>
             <option value="outlet" disabled={!building.rooms.length}>コンセント</option>
           </select>
         </>
       )}
 
-      {formMode === 'room' ? (
+      {checking && <p role="status">追加できる教室を確認中…</p>}
+      {addingRoomAccess && !checking && !showFields && (
+        roomAvailability?.registered ? <p>この建物の教室には利用条件が登録済みです。</p> : (
+          <>
+            <p className="review-error" role="alert">教室の登録状況を確認できませんでした。</p>
+            <button type="button" className="review-back" onClick={recheckRoomAccess}>再試行</button>
+          </>
+        )
+      )}
+
+      {showFields && (formMode === 'room' ? (
         <>
           <label htmlFor="room-name">教室名 *</label>
           <input id="room-name" name="name" defaultValue={record?.name} required maxLength="80" placeholder="例：A102教室" />
@@ -65,30 +113,51 @@ export default function BuildingDataForm({
         </>
       ) : (
         <>
-          <label htmlFor="outlet-room">教室 *</label>
-          <select id="outlet-room" name="room_id" defaultValue={record?.room_id} required>
-            {building.rooms.map(room => (
-              <option key={room.id} value={room.id}>{room.name}</option>
-            ))}
-          </select>
-          <label htmlFor="outlet-location">コンセントの位置 *</label>
-          <textarea
-            id="outlet-location" name="location_detail" defaultValue={record?.location_detail} required
-            maxLength="300" rows="3" placeholder="例：窓際の机の下"
-          />
-          <label htmlFor="outlet-ports">AC差込口数</label>
-          <input id="outlet-ports" name="ac_ports" defaultValue={record?.ac_ports ?? ''} type="number" min="0" max="50" step="1" placeholder="例：2" />
+          {isRoomAccess && record ? (
+            <input type="hidden" name="room_id" value={record.room_id} />
+          ) : (
+            <>
+              <label htmlFor="target-room">教室 *</label>
+              <select
+                id="target-room" name="room_id" required
+                defaultValue={availableRooms.some(room => room.id === preferredRoom) ? preferredRoom : availableRooms[0]?.id}
+              >
+                {availableRooms.map(room => (
+                  <option key={room.id} value={room.id}>{room.name}</option>
+                ))}
+              </select>
+            </>
+          )}
+          {isRoomAccess ? <RoomAccessFields record={record} loadAcademicUnits={loadAcademicUnits} /> : (
+            <>
+              <label htmlFor="outlet-location">コンセントの位置 *</label>
+              <textarea
+                id="outlet-location" name="location_detail" defaultValue={record?.location_detail} required
+                maxLength="300" rows="3" placeholder="例：窓際の机の下"
+              />
+              <label htmlFor="outlet-ports">AC差込口数</label>
+              <input id="outlet-ports" name="ac_ports" defaultValue={record?.ac_ports ?? ''} type="number" min="0" max="50" step="1" placeholder="例：2" />
+            </>
+          )}
         </>
+      ))}
+      {showFields && (
+        <p className="form-note">
+          * 必須項目。
+          {!record && !demoAccount.isActive() && '登録した情報は他の利用者にも公開されます。'}
+          {!record && formMode === 'room' && '教室は投稿から1週間、編集・削除できます。'}
+        </p>
       )}
-      <p className="form-note">
-        * 必須項目。
-        {!record && !demoAccount.isActive() && '登録した情報は他の利用者にも公開されます。'}
-        {!record && formMode === 'room' && '教室は投稿から1週間、編集・削除できます。'}
-      </p>
-      {invalid && <p className="review-error" role="alert">{label}の入力内容を確認してください。</p>}
-      <button type="submit" className="save-button" disabled={saving}>
-        {saving ? '保存中...' : record ? '保存する' : '追加する'}
-      </button>
+      {invalid && (
+        <p className="review-error" role="alert">
+          {isRoomAccess ? '所属と曜日を選択し、終了時刻を開始時刻より後にしてください。' : `${label}の入力内容を確認してください。`}
+        </p>
+      )}
+      {showFields && (
+        <button type="submit" className="save-button" disabled={saving || checking}>
+          {saving ? '保存中...' : record ? '保存する' : '追加する'}
+        </button>
+      )}
       {onCancel && <button type="button" className="review-back" disabled={saving} onClick={onCancel}>キャンセル</button>}
     </form>
   )

@@ -1,4 +1,5 @@
 import { roomEditDeadline } from '../utils/roomEditDeadline.js'
+import { ROOM_ACCESS_ALREADY_REGISTERED } from '../utils/roomAccess.js'
 
 export const DEMO_EMAIL = 'demo@example.com'
 export const DEMO_NOTICE = 'デモアカウントでログインしました。追加・変更はこのブラウザ内だけに保存され、公開データには反映されません。ブラウザのデータを消すと利用できなくなります。'
@@ -26,7 +27,7 @@ export function createDemoAccount({
     if (data.version !== 1 || !data.userId || !['rooms', 'outlets', 'reviews', 'photos', 'passkeys'].every(key => Array.isArray(data[key]))) {
       throw new Error('デモの保存データを読み込めませんでした。')
     }
-    return data
+    return { ...data, room_access_posts: data.room_access_posts ?? [] }
   }
 
   function write(data) {
@@ -132,6 +133,13 @@ export function createDemoAccount({
       if (table === 'reviews' && rows.some(row => data.reviews.some(item => item.room_id === row.room_id))) {
         throw new Error('この教室には既にレビューを投稿しています。')
       }
+      if (table === 'room_access_posts') {
+        const roomIds = new Set(data.room_access_posts.map(post => post.room_id))
+        for (const row of rows) {
+          if (roomIds.has(row.room_id)) throw new Error(ROOM_ACCESS_ALREADY_REGISTERED)
+          roomIds.add(row.room_id)
+        }
+      }
       write({ ...data, [table]: [...data[table], ...rows] })
       return rows
     },
@@ -144,8 +152,8 @@ export function createDemoAccount({
         if (!(roomEditDeadline(row.created_at) > Date.now())) {
           throw new Error('教室の編集・削除期限が過ぎています。')
         }
-        if (!changes && [data.outlets, data.reviews, data.photos].some(rows => rows.some(item => item.room_id === id))) {
-          throw new Error('コンセント・レビュー・写真が登録されている教室は削除できません。')
+        if (!changes && [data.outlets, data.reviews, data.photos, data.room_access_posts].some(rows => rows.some(item => item.room_id === id))) {
+          throw new Error('利用条件・コンセント・レビュー・写真が登録されている教室は削除できません。')
         }
       }
 

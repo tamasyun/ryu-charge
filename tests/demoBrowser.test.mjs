@@ -48,6 +48,19 @@ async function setup(browser, viewport, { registerOnFirstLogin = false } = {}) {
     reads.push({ path: url.pathname, anonymous: request.headers().authorization === `Bearer ${request.headers().apikey}` })
     let data = []
     if (url.pathname.endsWith('/buildings')) data = buildings
+    if (url.pathname.endsWith('/academic_units')) {
+      data = [
+        { id: 'engineering', name: '工学部', parent_id: null },
+        { id: 'engineering-department', name: '工学科', parent_id: 'engineering' },
+        { id: 'mechanical', name: '機械工学コース', parent_id: 'engineering-department' },
+        { id: 'computer-science', name: '知能情報コース', parent_id: 'engineering-department' },
+        { id: 'science', name: '理学部', parent_id: null },
+        { id: 'humanities', name: '人文社会学部', parent_id: null },
+        { id: 'law-politics', name: '国際法政学科', parent_id: 'humanities' },
+        { id: 'law', name: '法学プログラム', parent_id: 'law-politics' },
+        { id: 'advanced-legal-practice', name: '特修法曹コース', parent_id: 'law' },
+      ]
+    }
     if (url.pathname.endsWith('/room_reviews') && url.searchParams.get('select')?.includes('comment') && url.searchParams.get('room_id') === 'eq.r1') {
       data = [{ id: 'public-review', rating: 3, comment: '公開レビュー', user_id: null, created_at: '2026-11-01T00:00:00Z' }]
     }
@@ -70,6 +83,71 @@ async function choosePostAction(page, triggerName, action) {
   await page.getByRole('button', { name: triggerName, exact: true }).click()
   await page.getByRole('menu').getByRole('menuitem', { name: action, exact: true }).click()
 }
+
+test('room access form selects a collapsed faculty and saves editable schedules', async () => {
+  const browser = await webkit.launch()
+  try {
+    const { page, writes, errors } = await setup(browser, { width: 393, height: 852 })
+    await page.getByRole('button', { name: 'テスト棟', exact: true }).last().click()
+    await page.getByRole('button', { name: '＋ 追加', exact: true }).click()
+    await page.getByLabel('追加するもの').selectOption('room-access')
+    const faculty = page.getByRole('checkbox', { name: '工学部', exact: true })
+    await faculty.check()
+    await expect(page.getByRole('button', { name: '工学部を展開' })).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.locator('input[name="academic_unit_id"]')).toHaveValue('engineering')
+
+    await page.getByRole('button', { name: '工学部を展開' }).click()
+    await page.getByRole('button', { name: '工学科を展開' }).click()
+    const mechanical = page.getByRole('checkbox', { name: '機械工学コース' })
+    const computerScience = page.getByRole('checkbox', { name: '知能情報コース' })
+    await expect(mechanical).toBeChecked()
+    await expect(computerScience).toBeChecked()
+    await computerScience.uncheck()
+    assert.equal(await faculty.evaluate(input => input.indeterminate), true)
+    await expect(page.locator('input[name="academic_unit_id"]')).toHaveValue('mechanical')
+    await faculty.click()
+    await expect(computerScience).toBeChecked()
+
+    await page.getByRole('button', { name: '人文社会学部を展開' }).click()
+    await page.getByRole('button', { name: '国際法政学科を展開' }).click()
+    await page.getByRole('button', { name: '法学プログラムを展開' }).click()
+    const legalPractice = page.getByRole('checkbox', { name: '特修法曹コース', exact: true })
+    await legalPractice.check()
+    const law = page.getByRole('checkbox', { name: '法学プログラム', exact: true })
+    assert.equal(await law.evaluate(input => input.indeterminate), true)
+    assert.deepEqual(await page.locator('input[name="academic_unit_id"]').evaluateAll(
+      inputs => inputs.map(input => input.value)
+    ), ['engineering', 'advanced-legal-practice'])
+    await legalPractice.uncheck()
+
+    await page.getByRole('checkbox', { name: '月', exact: true }).check()
+    await page.getByRole('checkbox', { name: '水', exact: true }).check()
+    await page.getByLabel('開始', { exact: true }).fill('09:00')
+    await page.getByLabel('終了', { exact: true }).fill('17:00')
+    await page.getByRole('button', { name: '追加する', exact: true }).click()
+    const section = page.getByRole('region', { name: '教室の情報' })
+    await expect(section.getByText('月・水曜日 09:00〜17:00')).toBeVisible()
+    await expect(section.getByText('工学部', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '＋ 追加', exact: true }).click()
+    await expect(page.getByText('この建物の教室には利用条件が登録済みです。')).toBeVisible()
+    await expect(page.getByRole('button', { name: '追加する', exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: 'キャンセル', exact: true }).click()
+    await choosePostAction(page, '教室の情報（月・水曜日 09:00〜17:00）の操作', '編集')
+    await expect(faculty).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: '水', exact: true })).toBeChecked()
+    await page.getByRole('checkbox', { name: '終日' }).check()
+    await page.getByRole('button', { name: '保存する', exact: true }).click()
+    await expect(section.getByText('月・水曜日 終日')).toBeVisible()
+    await choosePostAction(page, '教室の情報（月・水曜日 終日）の操作', '削除')
+    await expect(section.getByText('利用条件は未登録です。')).toBeVisible()
+    await page.getByRole('button', { name: '＋ 追加', exact: true }).click()
+    await expect(page.getByLabel('教室 *', { exact: true })).toHaveValue('r1')
+    assert.deepEqual(writes, [])
+    assert.deepEqual(errors, [])
+  } finally {
+    await browser.close()
+  }
+})
 
 test('first browser login automatically registers a working passkey; reload and later login do not repeat enrollment', async () => {
   const browser = await chromium.launch()

@@ -3,6 +3,7 @@ import './App.css'
 import { appAuth } from './lib/supabase'
 import { demoAccount } from './demo/account.js'
 import { changeBuildingRecord, createRoom, createOutlet, fetchBuildings } from './services/buildings'
+import { deleteRoomAccess, fetchAcademicUnits, fetchRegisteredRoomIds, fetchRoomAccess, saveRoomAccess } from './services/roomAccess'
 import { fetchRoomPhotos, uploadRoomPhotos } from './services/RoomPhotos.js'
 import { isUniversityEmail } from './utils/universityEmail'
 import { readRedirectIntent, clearRedirectIntent } from './utils/authRedirect'
@@ -304,6 +305,11 @@ function App() {
   }
 
   async function handleChangeBuildingRecord(table, id, changes) {
+    if (table === 'room_access_posts') {
+      if (changes) await saveRoomAccess(changes, id)
+      else await deleteRoomAccess(id)
+      return
+    }
     await changeBuildingRecord(table, id, changes)
     await refreshBuildingData()
   }
@@ -320,13 +326,19 @@ function App() {
     setSaving(true)
     setErrorMessage('')
     try {
-      const record = { id: `${formMode}-${crypto.randomUUID()}`, ...fields }
-      if (formMode === 'room') await createRoom({ ...record, building_id: selectedBuilding.id })
-      else await createOutlet(record)
-      await refreshBuildingData()
+      if (formMode === 'room-access') {
+        await saveRoomAccess(fields)
+        setSelectedRoomId(fields.room_id)
+      } else {
+        const record = { id: `${formMode}-${crypto.randomUUID()}`, ...fields }
+        if (formMode === 'room') await createRoom({ ...record, building_id: selectedBuilding.id })
+        else await createOutlet(record)
+        await refreshBuildingData()
+      }
       setIsFormOpen(false)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '追加できませんでした。')
+      return false
     } finally {
       addDataLock.current = false
       setSaving(false)
@@ -407,6 +419,9 @@ function App() {
           onFormModeChange={setFormMode}
           onSubmit={handleAdd}
           saving={saving}
+          defaultRoomId={selectedRoom?.id}
+          loadAcademicUnits={fetchAcademicUnits}
+          loadRegisteredRoomIds={fetchRegisteredRoomIds}
         />
       )
     }
@@ -424,6 +439,8 @@ function App() {
         canPost={canPost}
         userId={user?.id}
         onChangeRecord={handleChangeBuildingRecord}
+        loadAcademicUnits={fetchAcademicUnits}
+        loadRoomAccess={fetchRoomAccess}
         onStartEdit={() => setSheetSnapIndex(2)}
         uploadingRoomId={uploadingRoomId}
         photoProgress={photoProgress}
