@@ -7,7 +7,7 @@ import { chromium, expect, webkit } from '@playwright/test'
 let server, baseURL
 before(async () => {
   server = await createServer({ cacheDir: 'node_modules/.vite-demo-tests', optimizeDeps: {
-    noDiscovery: true, include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@base-ui/react/dialog', '@base-ui/react/drawer', 'leaflet', 'react-leaflet', '@supabase/supabase-js', '@marsidev/react-turnstile'],
+    noDiscovery: true, include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@base-ui/react/dialog', '@base-ui/react/drawer', '@base-ui/react/menu', 'leaflet', 'react-leaflet', '@supabase/supabase-js', '@marsidev/react-turnstile'],
   }, server: { host: '127.0.0.1', port: 0, watch: null }, logLevel: 'error' })
   await server.listen()
   baseURL = `http://localhost:${server.httpServer.address().port}`
@@ -66,6 +66,11 @@ async function setup(browser, viewport, { registerOnFirstLogin = false } = {}) {
   return { context, page, writes, reads, notices, errors, buildings, cdp, authenticatorId }
 }
 
+async function choosePostAction(page, triggerName, action) {
+  await page.getByRole('button', { name: triggerName, exact: true }).click()
+  await page.getByRole('menu').getByRole('menuitem', { name: action, exact: true }).click()
+}
+
 test('first browser login automatically registers a working passkey; reload and later login do not repeat enrollment', async () => {
   const browser = await chromium.launch()
   try {
@@ -105,9 +110,22 @@ for (const [label, browserType, viewport] of [
       await page.getByRole('button', { name: /^自分の教室/ }).click()
       await page.getByText('編集・削除期限', { exact: false }).waitFor()
       await page.getByRole('button', { name: 'レビューを投稿' }).click()
-      assert.equal(await page.getByRole('button', { name: '教室を編集' }).count(), 0)
+      const roomActions = page.getByRole('button', { name: '教室の操作' })
+      await expect(roomActions).toHaveCount(0)
       await page.getByRole('button', { name: '← 教室に戻る' }).click()
-      await page.getByRole('button', { name: '教室を編集' }).click()
+      const menu = page.getByRole('menu')
+      await expect(menu).toHaveCount(0)
+      await roomActions.press('ArrowDown')
+      await expect(menu.getByRole('menuitem', { name: '編集' })).toBeFocused()
+      await expect(menu.getByRole('menuitem', { name: '削除' })).toBeInViewport()
+      await page.keyboard.press('Escape')
+      await expect(menu).toHaveCount(0)
+      await expect(roomActions).toBeFocused()
+      await roomActions.click()
+      await expect(menu).toBeVisible()
+      await page.getByRole('heading', { name: /^自分の教室/ }).click()
+      await expect(menu).toHaveCount(0)
+      await choosePostAction(page, '教室の操作', '編集')
       assert.equal(await page.getByLabel('教室名').inputValue(), '自分の教室')
       await page.getByLabel('教室名').fill('編集した教室')
       await page.getByRole('button', { name: '保存する', exact: true }).click()
@@ -119,21 +137,21 @@ for (const [label, browserType, viewport] of [
       await page.getByLabel('コンセントの位置').fill('自分のコンセント')
       await page.getByRole('button', { name: '追加する', exact: true }).click()
       await page.getByRole('heading', { name: /^編集した教室/ }).waitFor()
-      await page.getByRole('button', { name: '教室を削除' }).click()
+      await choosePostAction(page, '教室の操作', '削除')
       await page.getByRole('alert').filter({ hasText: '登録されている教室は削除できません' }).waitFor()
-      await page.getByRole('button', { name: 'コンセントを編集' }).click()
+      await choosePostAction(page, 'コンセント「自分のコンセント」の操作', '編集')
       assert.equal(await page.getByLabel('コンセントの位置').inputValue(), '自分のコンセント')
       await page.getByLabel('コンセントの位置').fill('編集したコンセント')
       await page.getByLabel('AC差込口数').fill('0')
       await page.getByRole('button', { name: '保存する', exact: true }).click()
       await page.getByText('編集したコンセント', { exact: true }).waitFor()
       await page.getByText('AC 0口', { exact: true }).waitFor()
-      await page.getByRole('button', { name: 'コンセントを削除' }).click()
+      await choosePostAction(page, 'コンセント「編集したコンセント」の操作', '削除')
       await page.getByText('コンセントは未登録です。', { exact: true }).waitFor()
-      await page.getByRole('button', { name: '教室を削除' }).click()
+      await choosePostAction(page, '教室の操作', '削除')
       await page.getByRole('button', { name: /^公開教室/ }).click()
       await page.getByText('公開レビュー', { exact: true }).waitFor()
-      assert.equal(await page.getByRole('button', { name: '教室を編集' }).count(), 0)
+      await expect(roomActions).toHaveCount(0)
 
       await page.evaluate(() => {
         const key = 'ryu-charge:demo:v1'
@@ -146,7 +164,7 @@ for (const [label, browserType, viewport] of [
       await page.getByRole('button', { name: '← 教室一覧に戻る' }).click()
       await page.getByRole('button', { name: /^期限切れ教室/ }).click()
       await page.getByText('教室の編集・削除期限は終了しました。').waitFor()
-      assert.equal(await page.getByRole('button', { name: /^教室を(編集|削除)$/ }).count(), 0)
+      await expect(roomActions).toHaveCount(0)
       assert.deepEqual(writes, [])
     } finally {
       await browser.close()
@@ -226,8 +244,7 @@ test('shared desktop app: local posting, fresh public data, photos, WebAuthn reg
     await roomDetails.getByRole('heading', { name: 'レビュー', exact: true }).waitFor()
     await roomDetails.getByText('公開レビュー', { exact: true }).waitFor()
     assert.equal(await roomDetails.locator('.room-detail + .room-reviews').count(), 1)
-    assert.equal(await page.getByRole('button', { name: '削除', exact: true }).count(), 0)
-    assert.equal(await page.getByRole('button', { name: '編集', exact: true }).count(), 0)
+    await expect(page.getByRole('button', { name: 'レビューの操作' })).toHaveCount(0)
     await page.getByRole('button', { name: 'レビューを投稿', exact: true }).click()
     await page.getByRole('heading', { name: '公開教室のレビューを投稿' }).waitFor()
     assert.equal(await roomDetails.count(), 0)
@@ -242,7 +259,7 @@ test('shared desktop app: local posting, fresh public data, photos, WebAuthn reg
     assert.equal(await roomDetails.getByText('試用のコンセント', { exact: true }).count(), 1)
     const mine = roomDetails.locator('.review-item').filter({ hasText: 'ブラウザだけのレビュー' })
     const originalDate = await mine.locator('time').getAttribute('datetime')
-    await mine.getByRole('button', { name: '編集', exact: true }).click()
+    await choosePostAction(page, 'レビューの操作', '編集')
     await page.getByRole('heading', { name: '公開教室のレビューを編集' }).waitFor()
     assert.equal(await roomDetails.count(), 0)
     assert.equal(await page.getByRole('button', { name: '5つ星' }).getAttribute('aria-pressed'), 'true')
@@ -258,7 +275,7 @@ test('shared desktop app: local posting, fresh public data, photos, WebAuthn reg
     assert.equal(await edited.locator('[aria-label="2つ星"]').count(), 1)
     await edited.getByRole('button', { name: 'レビュー写真を全画面表示' }).waitFor()
     await roomDetails.getByText('★ 2.5 / 5（2件）', { exact: true }).waitFor()
-    await page.getByRole('button', { name: '削除', exact: true }).click()
+    await choosePostAction(page, 'レビューの操作', '削除')
     await edited.waitFor({ state: 'detached' })
     await roomDetails.getByText('公開レビュー', { exact: true }).waitFor()
     assert.equal(await roomDetails.getByRole('button', { name: 'レビューを投稿', exact: true }).isEnabled(), true)
@@ -368,7 +385,7 @@ test('mobile WebKit uses the same map and account screens and keeps trials in th
     await reviews.getByRole('button', { name: 'レビューを投稿', exact: true }).click()
     await page.getByRole('button', { name: '4つ星' }).click()
     await page.getByRole('button', { name: '投稿する', exact: true }).click()
-    await reviews.getByRole('button', { name: '編集', exact: true }).click()
+    await choosePostAction(page, 'レビューの操作', '編集')
     await page.getByRole('heading', { name: '公開教室のレビューを編集' }).waitFor()
     assert.equal(await reviews.count(), 0)
     await page.getByLabel('コメント（任意）').fill('スマホから編集')

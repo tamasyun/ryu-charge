@@ -1,4 +1,5 @@
 import PhotoViewer from '../photos/PhotoViewer'
+import PostActionsMenu from '../PostActionsMenu'
 import { useEffect, useState } from 'react'
 import { fetchReviews, deleteReview } from '../../services/reviews'
 import { appAuth } from '../../lib/supabase'
@@ -13,7 +14,7 @@ export default function ReviewList({ roomId, onEdit, onDeleted, reviewVersion })
   const loading = !current
   const errorMessage = current?.errorMessage
 
-  // ログイン・ログアウト後も、自分の投稿にだけ削除ボタンを表示する。
+  // ログイン・ログアウト後も、自分の投稿にだけ操作メニューを表示する。
   useEffect(() => {
     const { data: { subscription } } = appAuth.onAuthStateChange((_event, session) => {
       setCurrentUserId(session?.user?.id ?? null)
@@ -68,12 +69,12 @@ export default function ReviewList({ roomId, onEdit, onDeleted, reviewVersion })
               <time dateTime={review.created_at}>
                 {new Date(review.created_at).toLocaleDateString('ja-JP')}
               </time>
-              {/* 自分の投稿だけ編集・削除できる。 */}
               {currentUserId && review.user_id === currentUserId && (
-                <div className="record-actions">
-                  {onEdit && <button type="button" onClick={() => onEdit(review)}>編集</button>}
-                  <button type="button" onClick={() => handleDelete(review.id)}>削除</button>
-                </div>
+                <PostActionsMenu
+                  label="レビュー"
+                  onEdit={onEdit ? () => onEdit(review) : undefined}
+                  onDelete={() => handleDelete(review.id)}
+                />
               )}
             </div>
           </div>
