@@ -46,6 +46,21 @@ export async function createReview({ roomId, rating, comment, imageFile = null }
   if (error) throw error
 }
 
+export async function updateReview(id, { rating, comment }) {
+  if (demoAccount.isActive()) {
+    demoAccount.updateReview(id, { rating, comment })
+    return
+  }
+  const { data, error } = await getDataClient()
+    .from('room_reviews')
+    .update({ rating, comment })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle()
+  if (error) throw error
+  if (data?.id !== id) throw new Error('レビューを編集できませんでした。投稿とログイン状態を確認してください。')
+}
+
 export async function fetchReviewOverview(roomIds) {
   const byRoom = {}
   if (roomIds.length === 0) return byRoom

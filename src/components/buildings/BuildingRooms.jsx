@@ -26,7 +26,7 @@ function RecordActions({ label, disabled, onEdit, onDelete }) {
 
 function RoomDetails({
   building, room, roomPhotos = {}, canPost, userId, uploadingRoomId, photoProgress,
-  onAddPhotos, reviews, isWritingReview, onBack, onChangeRecord, onStartEdit,
+  onAddPhotos, reviews, onBack, onChangeRecord, onStartEdit,
 }) {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -123,7 +123,7 @@ function RoomDetails({
             ) : '教室の編集・削除期限は終了しました。'}
           </p>
         )}
-        {canManageRoom && !isWritingReview && (
+        {canManageRoom && (
           <RecordActions
             label="教室"
             disabled={saving}
@@ -185,7 +185,7 @@ function RoomDetails({
                   <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
                   <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
                 </div>
-                {userId && outlet.user_id === userId && !isWritingReview && (
+                {userId && outlet.user_id === userId && (
                   <RecordActions
                     label="コンセント"
                     disabled={saving}
