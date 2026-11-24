@@ -38,8 +38,8 @@ function App() {
   const [selectedBuildingId, setSelectedBuildingId] = useState(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [formMode, setFormMode] = useState('outlet')
-  const [detailView, setDetailView] = useState('details')
   const [selectedRoomId, setSelectedRoomId] = useState(null)
+  const [reviewFormRoomId, setReviewFormRoomId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -55,10 +55,9 @@ function App() {
   const [signingOut, setSigningOut] = useState(false)
   const [loginIntent, setLoginIntent] = useState(null)
   const [redirectIntent, setRedirectIntent] = useState(readRedirectIntent)
-  const [reviewOverviewVersion, setReviewOverviewVersion] = useState(0)
+  const [reviewVersion, setReviewVersion] = useState(0)
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const [accountNotice, setAccountNotice] = useState('')
-  const [authorVersion, setAuthorVersion] = useState(0)
   const accountReturnFocusRef = useRef(null)
   const [roomPhotos, setRoomPhotos] = useState({})
   const [uploadingRoomId, setUploadingRoomId] = useState(null)
@@ -78,7 +77,8 @@ function App() {
     buildings.find(building => building.id === selectedBuildingId) ?? null
   const selectedRoom =
     selectedBuilding?.rooms.find(room => room.id === selectedRoomId) ?? null
-  const reviewOverview = useReviewOverview(selectedBuilding, reviewOverviewVersion)
+  const isReviewFormOpen = canPost && selectedRoom != null && selectedRoom.id === reviewFormRoomId
+  const reviewOverview = useReviewOverview(selectedBuilding, reviewVersion)
   const sheetSnapPoints = SHEET_SNAP_POINTS[selectedBuilding ? 'details' : 'list'][isLandscape ? 'landscape' : 'portrait']
   const sheetSnap = sheetSnapPoints[sheetSnapIndex]
   const sheetHeight = typeof sheetSnap === 'number' ? `${sheetSnap * 100}dvh` : sheetSnap
@@ -114,11 +114,10 @@ function App() {
         accountIdentityRef.current = nextId
         setBuildings([])
         setRoomPhotos({})
-        setDetailView('details')
+        setReviewFormRoomId(null)
         setIsFormOpen(false)
         setIsAccountOpen(false)
-        setAuthorVersion(value => value + 1)
-        setReviewOverviewVersion(value => value + 1)
+        setReviewVersion(value => value + 1)
         setRoomPhotosVersion(value => value + 1)
       }
       setUser(session?.user ?? null)
@@ -144,7 +143,7 @@ function App() {
         })),
       })),
     })))
-    setAuthorVersion(value => value + 1)
+    setReviewVersion(value => value + 1)
   }
 
   const loadBuildings = useCallback(async (isActive = () => true) => {
@@ -161,10 +160,9 @@ function App() {
     setIsAccountOpen(false)
     setIsFormOpen(false)
     setLoginIntent(null)
-    setDetailView('details')
+    setReviewFormRoomId(null)
     setAccountNotice(confirmed ? 'アカウントを削除しました。' : 'セッションが無効になりました。再ログインして削除状態を確認してください。')
-    setAuthorVersion(value => value + 1)
-    setReviewOverviewVersion(value => value + 1)
+    setReviewVersion(value => value + 1)
     setRoomPhotosVersion(value => value + 1)
     loadBuildings().catch(() => setErrorMessage('設備情報を再取得できませんでした。ページを再読み込みしてください。'))
   }
@@ -198,8 +196,7 @@ function App() {
     function refresh() {
       if (document.visibilityState === 'hidden') return
       initialize()
-      setAuthorVersion(value => value + 1)
-      setReviewOverviewVersion(value => value + 1)
+      setReviewVersion(value => value + 1)
       setRoomPhotosVersion(value => value + 1)
     }
     const timer = isDemo ? window.setInterval(refresh, 60000) : null
@@ -241,12 +238,12 @@ function App() {
         setIsDesktopOpen(true)
         if (intent.type === 'review' && building.rooms.some(r => r.id === intent.roomId)) {
           setSelectedRoomId(intent.roomId)
-          setDetailView('write')
+          setReviewFormRoomId(intent.roomId)
           setIsFormOpen(false)
           setSheetSnapIndex(2)
         } else if (intent.type === 'add') {
           setSelectedRoomId(null)
-          setDetailView('details')
+          setReviewFormRoomId(null)
           setIsFormOpen(true)
           setSheetSnapIndex(2)
         }
@@ -262,7 +259,7 @@ function App() {
   // ★ マップ上のピンを押したときの処理：直接その建物の教室情報を開く
   function selectBuilding(building) {
     setSelectedBuildingId(building.id)
-    setDetailView('details')
+    setReviewFormRoomId(null)
     setSelectedRoomId(null)
     setFormMode(building.rooms.length ? 'outlet' : 'room')
     setIsFormOpen(false)
@@ -274,7 +271,7 @@ function App() {
   function closeDetails() {
     setSelectedBuildingId(null)
     setIsFormOpen(false)
-    setDetailView('details')
+    setReviewFormRoomId(null)
     setSelectedRoomId(null)
     setSheetSnapIndex(1)
   }
@@ -290,7 +287,7 @@ function App() {
   function handleOpenBuildingList() {
     setSelectedBuildingId(null)
     setSelectedRoomId(null)
-    setDetailView('details')
+    setReviewFormRoomId(null)
     setIsFormOpen(false)
     setErrorMessage('')
     setSheetSnapIndex(1)
@@ -373,64 +370,65 @@ function App() {
     }
   }
 
+  function handleReviewsChanged() {
+    setReviewVersion(version => version + 1)
+  }
+
   function renderDetailBody() {
+    if (isFormOpen && canPost) {
+      return (
+        <BuildingDataForm
+          building={selectedBuilding}
+          formMode={formMode}
+          onFormModeChange={setFormMode}
+          onSubmit={handleAdd}
+          saving={saving}
+        />
+      )
+    }
+
     return (
-      <>
-        {detailView !== 'details' && selectedRoom ? (
+      <BuildingRooms
+        building={selectedBuilding}
+        selectedRoom={selectedRoom}
+        onSelectRoom={roomId => {
+          setSelectedRoomId(roomId)
+          setReviewFormRoomId(null)
+        }}
+        reviewOverview={reviewOverview}
+        roomPhotos={roomPhotos}
+        canPost={canPost}
+        userId={user?.id}
+        onChangeRecord={handleChangeBuildingRecord}
+        onStartEdit={() => setSheetSnapIndex(2)}
+        isWritingReview={isReviewFormOpen}
+        uploadingRoomId={uploadingRoomId}
+        photoProgress={photoProgress}
+        onAddPhotos={handleAddRoomPhotos}
+        onBackToBuildings={closeDetails}
+        reviews={selectedRoom && (
           <RoomReviews
-            authorVersion={authorVersion}
+            reviewVersion={reviewVersion}
             key={`${user?.id ?? 'guest'}-${selectedRoom.id}`}
             roomId={selectedRoom.id}
-            roomName={selectedRoom.name}
-            mode={detailView}
+            isWriting={isReviewFormOpen}
             canPost={canPost}
             authReady={authReady && profileStatus !== 'loading'}
             isLoggedIn={Boolean(user)}
             onWrite={() => {
-              setDetailView('write')
+              setReviewFormRoomId(selectedRoom.id)
               setSheetSnapIndex(2)
             }}
+            onCancel={() => setReviewFormRoomId(null)}
             onLogin={handleReviewLogin}
-            onBack={() => {
-              setDetailView('details')
-              setSelectedRoomId(null)
-            }}
             onSubmitted={() => {
-              setReviewOverviewVersion(version => version + 1)
-              setDetailView('reviews')
+              handleReviewsChanged()
+              setReviewFormRoomId(current => current === selectedRoom.id ? null : current)
             }}
-          />
-        ) : isFormOpen && canPost ? (
-          <BuildingDataForm
-            building={selectedBuilding}
-            formMode={formMode}
-            onFormModeChange={setFormMode}
-            onSubmit={handleAdd}
-            saving={saving}
-          />
-        ) : (
-          <BuildingRooms
-            key={selectedBuilding.id}
-            building={selectedBuilding}
-            reviewOverview={reviewOverview}
-            roomPhotos={roomPhotos}
-            canPost={canPost}
-            userId={user?.id}
-            onChangeRecord={handleChangeBuildingRecord}
-            onStartEdit={() => setSheetSnapIndex(2)}
-            uploadingRoomId={uploadingRoomId}
-            photoProgress={photoProgress}
-            onAddPhotos={handleAddRoomPhotos}
-            onShowReviews={roomId => {
-              setSelectedRoomId(roomId)
-              setIsFormOpen(false)
-              setDetailView('reviews')
-              setSheetSnapIndex(2)
-            }}
-            onBackToBuildings={closeDetails}
+            onDeleted={handleReviewsChanged}
           />
         )}
-      </>
+      />
     )
   }
 
@@ -452,7 +450,7 @@ function App() {
   }
 
   function renderDetailFooter() {
-    return detailView === 'details' && authReady && user && (
+    return !isReviewFormOpen && authReady && user && (
       <div className="detail-footer">
         <button
           type="button"
@@ -553,6 +551,7 @@ function App() {
 
         <BuildingDetailsPanel
           building={selectedBuilding}
+          roomId={selectedRoom?.id}
           isMobile={isMobile}
           snapPoints={sheetSnapPoints}
           snapIndex={sheetSnapIndex}

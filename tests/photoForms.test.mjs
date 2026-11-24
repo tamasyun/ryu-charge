@@ -75,9 +75,10 @@ test('room UI: accepts five HEIC files in selection order and announces progress
   await page.goto(`${baseURL}/tests/browser-harness.html`)
   await page.evaluate(async () => {
     const { createRoot, React, BuildingRooms } = await import('/tests/browser-harness.mjs')
+    const room = { id: 'room-1', name: '101', outlets: [] }
     window.root = createRoot(document.getElementById('root'))
     window.renderRooms = progress => window.root.render(React.createElement(BuildingRooms, {
-      building: { id: 'building-1', rooms: [{ id: 'room-1', name: '101', outlets: [] }] },
+      building: { id: 'building-1', rooms: [room] }, selectedRoom: room,
       reviewOverview: { buildingId: 'building-1', status: 'ready', byRoom: {} },
       canPost: true, uploadingRoomId: progress ? 'room-1' : null, photoProgress: progress,
       onAddPhotos: (_id, files) => { window.selectedPhotos = files.map(file => file.name); window.renderRooms({ phase: 'processing', current: 1, total: files.length }) },

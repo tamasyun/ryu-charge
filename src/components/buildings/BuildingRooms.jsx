@@ -25,8 +25,8 @@ function RecordActions({ label, disabled, onEdit, onDelete }) {
 }
 
 function RoomDetails({
-  building, room, reviewOverview, roomPhotos = {}, canPost, userId, uploadingRoomId,
-  photoProgress, onAddPhotos, onShowReviews, onBack, onChangeRecord, onStartEdit,
+  building, room, roomPhotos = {}, canPost, userId, uploadingRoomId, photoProgress,
+  onAddPhotos, reviews, isWritingReview, onBack, onChangeRecord, onStartEdit,
 }) {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -123,7 +123,7 @@ function RoomDetails({
             ) : '教室の編集・削除期限は終了しました。'}
           </p>
         )}
-        {canManageRoom && (
+        {canManageRoom && !isWritingReview && (
           <RecordActions
             label="教室"
             disabled={saving}
@@ -185,7 +185,7 @@ function RoomDetails({
                   <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
                   <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
                 </div>
-                {userId && outlet.user_id === userId && (
+                {userId && outlet.user_id === userId && !isWritingReview && (
                   <RecordActions
                     label="コンセント"
                     disabled={saving}
@@ -197,25 +197,15 @@ function RoomDetails({
             ))}
           </ul>
         )}
-
-        <button type="button" className="review-list-link" onClick={() => onShowReviews(room.id)}>
-          <span className="review-link-content">
-            <span>レビューを見る</span>
-            <span className="review-link-overview">
-              {reviewOverviewLabel(reviewOverview, building.id, room.id)}
-            </span>
-          </span>
-          <span aria-hidden="true">→</span>
-        </button>
       </section>
+      {reviews}
     </div>
   )
 }
 
-export default function BuildingRooms({ building, reviewOverview, onBackToBuildings, ...roomDetails }) {
-  const [selectedRoomId, setSelectedRoomId] = useState(null)
-  const selectedRoom = building.rooms.find(room => room.id === selectedRoomId)
-
+export default function BuildingRooms({
+  building, selectedRoom, onSelectRoom, reviewOverview, onBackToBuildings, ...roomDetails
+}) {
   if (building.rooms.length === 0) {
     return (
       <div>
@@ -240,8 +230,7 @@ export default function BuildingRooms({ building, reviewOverview, onBackToBuildi
         key={selectedRoom.id}
         building={building}
         room={selectedRoom}
-        reviewOverview={reviewOverview}
-        onBack={() => setSelectedRoomId(null)}
+        onBack={() => onSelectRoom(null)}
         {...roomDetails}
       />
     )
@@ -267,7 +256,7 @@ export default function BuildingRooms({ building, reviewOverview, onBackToBuildi
           <button
             key={room.id}
             type="button"
-            onClick={() => setSelectedRoomId(room.id)}
+            onClick={() => onSelectRoom(room.id)}
             style={{
               display: 'flex',
               alignItems: 'center',

@@ -1,13 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReviewForm from './ReviewForm'
 import ReviewList from './ReviewList'
 import './RoomReviews.css'
 import { checkUserHasReviewed } from '../../services/reviews'
 
-export default function RoomReviews({ roomId, roomName, mode, canPost, authReady, isLoggedIn, onWrite, onLogin, onBack, onSubmitted, authorVersion }) {
+export default function RoomReviews({
+  roomId,
+  isWriting,
+  canPost,
+  authReady,
+  isLoggedIn,
+  onWrite,
+  onCancel,
+  onLogin,
+  onSubmitted,
+  onDeleted,
+  reviewVersion,
+}) {
   const [hasReviewed, setHasReviewed] = useState(false)
+  const headingRef = useRef(null)
 
-  // 部屋が変わった時やログイン状態が変わった時に、投稿済みか確認する
+  // 教室やレビューが更新された時に、ログイン中のユーザーが投稿済みか確認する
   useEffect(() => {
     let active = true
     async function check() {
@@ -20,56 +33,49 @@ export default function RoomReviews({ roomId, roomName, mode, canPost, authReady
     }
     check()
     return () => { active = false }
-  }, [roomId, isLoggedIn])
+  }, [roomId, isLoggedIn, reviewVersion])
+
+  useEffect(() => {
+    if (!isWriting) return
+    const frame = requestAnimationFrame(() => {
+      headingRef.current?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [isWriting])
 
   function handleFormSubmitted() {
     setHasReviewed(true)
-    onSubmitted?.()
+    onSubmitted()
   }
 
   return (
     <section className="room-reviews">
-      <button className="review-back" type="button" onClick={onBack}>
-        ← 建物に戻る
-      </button>
-      {mode === 'write' ? (
-        <>
-          <h3>{roomName}のレビューを投稿</h3>
-          {canPost ? (
-            <ReviewForm roomId={roomId} canPost={canPost} onSubmitted={handleFormSubmitted} />
-          ) : (
-            <div className="review-login-required">
-              <p>レビューの投稿には琉球大学のメールアドレスでのログインが必要です。</p>
-              <button type="button" className="save-button" onClick={onLogin}>
-                ログインして投稿
-              </button>
-            </div>
-          )}
-        </>
+      <div className="review-list-heading" ref={headingRef}>
+        <h4>レビュー</h4>
+        <button
+          type="button"
+          className="write-review-button"
+          disabled={!isWriting && (!authReady || hasReviewed)}
+          onClick={isWriting ? onCancel : canPost ? onWrite : onLogin}
+        >
+          {isWriting
+            ? '投稿をキャンセル'
+            : !authReady
+            ? '確認中...'
+            : !isLoggedIn
+            ? 'ログインして投稿'
+            : hasReviewed
+            ? 'レビュー済み'
+            : 'レビューを投稿'}
+        </button>
+      </div>
+      {isWriting ? (
+        <ReviewForm roomId={roomId} canPost={canPost} onSubmitted={handleFormSubmitted} />
       ) : (
-        <>
-          <div className="review-list-heading">
-            <h3>{roomName}のレビュー</h3>
-            <button
-              type="button"
-              className="write-review-button"
-              disabled={!authReady || hasReviewed}
-              onClick={canPost ? onWrite : onLogin}
-            >
-              {!authReady
-                ? '確認中...'
-                : !isLoggedIn
-                ? 'ログインして投稿'
-                : hasReviewed
-                ? 'レビュー済み'
-                : 'レビューを投稿'}
-            </button>
-          </div>
-          <ReviewList roomId={roomId} authorVersion={authorVersion} onDeleted={() => {
-            setHasReviewed(false)
-            onSubmitted?.()
-          }} />
-        </>
+        <ReviewList roomId={roomId} reviewVersion={reviewVersion} onDeleted={() => {
+          setHasReviewed(false)
+          onDeleted()
+        }} />
       )}
     </section>
   )

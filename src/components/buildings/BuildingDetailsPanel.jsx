@@ -4,6 +4,7 @@ import CloseIcon from '../CloseIcon'
 
 export default function BuildingDetailsPanel({
   building,
+  roomId,
   isMobile,
   snapPoints,
   snapIndex,
@@ -31,7 +32,7 @@ export default function BuildingDetailsPanel({
 
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0
-  }, [buildingId, overviewRequest])
+  }, [buildingId, roomId, overviewRequest])
 
   useEffect(() => {
     const previous = previousBuildingId.current
