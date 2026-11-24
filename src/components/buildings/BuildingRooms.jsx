@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import BuildingDataForm from './BuildingDataForm'
+import PostActionsMenu from '../PostActionsMenu'
 import { roomEditDeadline } from '../../utils/roomEditDeadline.js'
 import PhotoViewer from '../photos/PhotoViewer'
 import { IMAGE_ACCEPT } from '../../utils/imageProcessor.js'
@@ -13,15 +14,6 @@ function reviewOverviewLabel(overview, buildingId, roomId) {
   const summary = overview.byRoom[roomId]
   if (!summary) return 'まだレビューはありません'
   return `★ ${(summary.ratingTotal / summary.count).toFixed(1)} ・ レビュー${summary.count}件`
-}
-
-function RecordActions({ label, disabled, onEdit, onDelete }) {
-  return (
-    <div className="record-actions">
-      <button type="button" aria-label={`${label}を編集`} disabled={disabled} onClick={onEdit}>編集</button>
-      <button type="button" aria-label={`${label}を削除`} disabled={disabled} onClick={onDelete}>削除</button>
-    </div>
-  )
 }
 
 function RoomDetails({
@@ -107,11 +99,21 @@ function RoomDetails({
       </button>
 
       <section className="room-detail" style={{ borderTop: 'none', paddingTop: 0 }}>
-        <h3>
-          {room.name}
-          {room.floor != null ? `（${room.floor}階）` : ''}
-          <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
-        </h3>
+        <div className="room-detail-heading">
+          <h3>
+            {room.name}
+            {room.floor != null ? `（${room.floor}階）` : ''}
+            <span className="contributor-name">追加：{authorLabel(room.author_nickname)}</span>
+          </h3>
+          {canManageRoom && (
+            <PostActionsMenu
+              label="教室"
+              disabled={saving}
+              onEdit={() => startEdit('rooms', room.id)}
+              onDelete={() => changeRecord('rooms', room.id)}
+            />
+          )}
+        </div>
         <p>{room.location_detail}</p>
         {message}
         {isRoomOwner && Number.isFinite(deadline) && (
@@ -122,14 +124,6 @@ function RoomDetails({
               </time></>
             ) : '教室の編集・削除期限は終了しました。'}
           </p>
-        )}
-        {canManageRoom && (
-          <RecordActions
-            label="教室"
-            disabled={saving}
-            onEdit={() => startEdit('rooms', room.id)}
-            onDelete={() => changeRecord('rooms', room.id)}
-          />
         )}
 
         <div className="room-photo-section">
@@ -181,18 +175,20 @@ function RoomDetails({
             {room.outlets.map(outlet => (
               <li key={outlet.id}>
                 <strong>{outlet.location_detail}</strong>
-                <div>
-                  <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
-                  <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
+                <div className="outlet-detail-meta">
+                  <div>
+                    <span>{outlet.ac_ports == null ? 'AC口数未確認' : `AC ${outlet.ac_ports}口`}</span>
+                    <span className="contributor-name">追加：{authorLabel(outlet.author_nickname)}</span>
+                  </div>
+                  {userId && outlet.user_id === userId && (
+                    <PostActionsMenu
+                      label={`コンセント「${outlet.location_detail}」`}
+                      disabled={saving}
+                      onEdit={() => startEdit('outlets', outlet.id)}
+                      onDelete={() => changeRecord('outlets', outlet.id)}
+                    />
+                  )}
                 </div>
-                {userId && outlet.user_id === userId && (
-                  <RecordActions
-                    label="コンセント"
-                    disabled={saving}
-                    onEdit={() => startEdit('outlets', outlet.id)}
-                    onDelete={() => changeRecord('outlets', outlet.id)}
-                  />
-                )}
               </li>
             ))}
           </ul>
