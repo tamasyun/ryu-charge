@@ -27,7 +27,7 @@ async function openApp(page) {
   await page.route('**/src/services/buildings*', route => route.fulfill({
     contentType: 'text/javascript',
     body: `export async function fetchBuildings() { return ${JSON.stringify(buildings)} }
-      export async function createRoom() {} export async function createOutlet() {}`,
+      export async function createRoom() {} export async function createOutlet() {} export async function changeBuildingRecord() {}`,
   }))
   // No test writes or reads production records.
   await page.route('**/rest/v1/**', route => route.abort())
@@ -72,7 +72,7 @@ for (const [label, browserType] of [['Chrome', chromium], ['WebKit', webkit]]) {
       })
       await page.route('**/src/services/buildings*', route => route.fulfill({
         contentType: 'text/javascript', body: `export async function fetchBuildings() { return ${JSON.stringify(buildings)} }
-          export async function createRoom() {} export async function createOutlet() {}`,
+          export async function createRoom() {} export async function createOutlet() {} export async function changeBuildingRecord() {}`,
       }))
       await page.route('**/rest/v1/**', route => route.abort())
       await page.goto(`${baseURL}/tests/browser-harness.html`)

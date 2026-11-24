@@ -1,3 +1,5 @@
+import { roomEditDeadline } from '../utils/roomEditDeadline.js'
+
 export const DEMO_EMAIL = 'demo@example.com'
 export const DEMO_NOTICE = 'デモアカウントでログインしました。追加・変更はこのブラウザ内だけに保存され、公開データには反映されません。ブラウザのデータを消すと利用できなくなります。'
 export const DEMO_STORAGE_KEY = 'ryu-charge:demo:v1'
@@ -132,6 +134,25 @@ export function createDemoAccount({
       }
       write({ ...data, [table]: [...data[table], ...rows] })
       return rows
+    },
+    changeBuildingRecord(table, id, changes) {
+      const data = requireActive()
+      const row = data[table].find(item => item.id === id && item.user_id === data.userId)
+      if (!row) throw new Error('自分が追加した情報だけ変更できます。')
+
+      if (table === 'rooms') {
+        if (!(roomEditDeadline(row.created_at) > Date.now())) {
+          throw new Error('教室の編集・削除期限が過ぎています。')
+        }
+        if (!changes && [data.outlets, data.reviews, data.photos].some(rows => rows.some(item => item.room_id === id))) {
+          throw new Error('コンセント・レビュー・写真が登録されている教室は削除できません。')
+        }
+      }
+
+      const rows = changes
+        ? data[table].map(item => item === row ? { ...row, ...changes } : item)
+        : data[table].filter(item => item !== row)
+      write({ ...data, [table]: rows })
     },
     removeReview(id) {
       const data = requireActive()

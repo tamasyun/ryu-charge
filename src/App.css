@@ -304,6 +304,31 @@
   font-size: 12px;
 }
 
+.record-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.room-detail li > .record-actions {
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+
+.record-actions button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-h);
+  background: var(--bg);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.record-actions button:last-child { color: var(--error); }
+.record-actions button:disabled { opacity: 0.5; cursor: default; }
+
 .detail-footer {
   display: flex;
   justify-content: flex-end;
