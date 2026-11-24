@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import PhotoViewer from '../photos/PhotoViewer'
 import { IMAGE_ACCEPT } from '../../utils/imageProcessor.js'
 import { authorLabel } from '../../utils/nickname'
@@ -15,23 +14,17 @@ function reviewOverviewLabel(overview, buildingId, roomId) {
 
 export default function BuildingRooms({
   building,
+  selectedRoom: room,
+  onSelectRoom,
   reviewOverview,
   roomPhotos = {},
   canPost,
   uploadingRoomId,
   photoProgress,
   onAddPhotos,
-  onShowReviews,
+  reviews,
   onBackToBuildings, // ★ 建物一覧に戻る関数を追加
 }) {
-  // 選択された教室のID（null の時は一覧を表示）
-  const [selectedRoomId, setSelectedRoomId] = useState(null)
-
-  // 建物が切り替わったら一覧表示にリセットする
-  useEffect(() => {
-    setSelectedRoomId(null)
-  }, [building.id])
-
   if (building.rooms.length === 0) {
     return (
       <div>
@@ -53,13 +46,7 @@ export default function BuildingRooms({
   // ----------------------------------------------------
   // ① 教室が選択されている場合：その教室の詳細だけを表示
   // ----------------------------------------------------
-  if (selectedRoomId) {
-    const room = building.rooms.find(r => r.id === selectedRoomId)
-    if (!room) {
-      setSelectedRoomId(null)
-      return null
-    }
-
+  if (room) {
     const photos = roomPhotos[room.id] ?? []
     const isUploading = uploadingRoomId === room.id
 
@@ -69,7 +56,7 @@ export default function BuildingRooms({
         <button
           type="button"
           className="review-back"
-          onClick={() => setSelectedRoomId(null)}
+          onClick={() => onSelectRoom(null)}
           style={{ marginBottom: '12px' }}
         >
           ← 教室一覧に戻る
@@ -140,17 +127,8 @@ export default function BuildingRooms({
               ))}
             </ul>
           )}
-
-          <button type="button" className="review-list-link" onClick={() => onShowReviews(room.id)}>
-            <span className="review-link-content">
-              <span>レビューを見る</span>
-              <span className="review-link-overview">
-                {reviewOverviewLabel(reviewOverview, building.id, room.id)}
-              </span>
-            </span>
-            <span aria-hidden="true">→</span>
-          </button>
         </section>
+        {reviews}
       </div>
     )
   }
@@ -178,7 +156,7 @@ export default function BuildingRooms({
           <button
             key={room.id}
             type="button"
-            onClick={() => setSelectedRoomId(room.id)}
+            onClick={() => onSelectRoom(room.id)}
             style={{
               display: 'flex',
               alignItems: 'center',

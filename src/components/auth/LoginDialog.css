@@ -132,8 +132,6 @@
   cursor: pointer;
 }
 .login-error { margin-top: 12px; color: var(--error); font-size: 13px; overflow-wrap: anywhere; }
-.review-login-required { display: grid; justify-items: start; gap: 16px; }
-.review-login-required p { font-size: 14px; }
 
 @media (max-width: 600px) {
   .login-dialog { padding: 20px; }

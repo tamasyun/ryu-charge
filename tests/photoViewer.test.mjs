@@ -37,7 +37,7 @@ async function mount(page, { review = false, mobile = false, gallery = false } =
       ...(gallery ? [{ id: 'room-2', name: '102', outlets: [] }] : []),
     ] }
     const content = review ? React.createElement(ReviewList, { roomId: 'room-1' }) : React.createElement(BuildingRooms, {
-      building, reviewOverview: { buildingId: 'building-1', status: 'ready', byRoom: {} },
+      building, selectedRoom: building.rooms[0], reviewOverview: { buildingId: 'building-1', status: 'ready', byRoom: {} },
       roomPhotos: {
         'room-1': gallery ? [1, 2, 3].map(id => ({ id: `photo-${id}`, image_url: `/tests/fixtures/oriented.png?photo=${id}` }))
           : [{ id: 'photo-1', image_url: '/tests/fixtures/oriented.png' }],
